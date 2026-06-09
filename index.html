@@ -637,6 +637,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v1.5</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -918,7 +919,7 @@ function DetailPanel({task,lists,onUpdate,onDelete,onClose,onDelay}) {
             <input type="date" className="detail-date" value={local.startDate||''} onChange={e=>push({startDate:e.target.value})}/>
           </div>
           <div className="detail-field">
-            <label>Fi</label>
+            <label>{(local.recurrence&&local.recurrence!=='none')?'Pròxim venciment':'Fi'}</label>
             <input type="date" className="detail-date" value={local.endDate||''} onChange={e=>push({endDate:e.target.value})}/>
           </div>
         </div>
@@ -1264,7 +1265,7 @@ function NewTaskModal({lists,defaultList,onSave,onClose}) {
         </div>
         <div className="input-row">
           <div style={{flex:1}}>
-            <label style={{fontSize:10,color:'var(--text3)',display:'block',marginBottom:3}}>Fi</label>
+            <label style={{fontSize:10,color:'var(--text3)',display:'block',marginBottom:3}}>{form.recurrence!=='none'?'Primera ocurrència':'Fi'}</label>
             <input type="date" className="input" value={form.endDate} onChange={e=>set('endDate',e.target.value)}/>
           </div>
           <div style={{flex:1}}>
@@ -1401,28 +1402,72 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask}) {
 }
 
 // ─── SEGUIMENT VIEW ───────────────────────────────────────────────────────────
+// Genera totes les ocurrències futures d'una tasca dins del rang [startStr, endStr]
+function getTaskOccurrences(task, startStr, endStr) {
+  const dates = new Set();
+  if (!task.endDate) return dates;
+  // Troba la primera ocurrència >= startStr
+  let cur = task.endDate;
+  // Si la tasca és recurrent i cur < startStr, avança fins arribar al rang
+  if (task.recurrence && task.recurrence !== 'none') {
+    let safety = 0;
+    while (cur < startStr && safety < 500) {
+      const nx = nextOccurrence(cur, task.recurrence);
+      if (!nx || (task.recurrenceEndDate && nx > task.recurrenceEndDate)) break;
+      cur = nx; safety++;
+    }
+  }
+  // Afegeix ocurrències dins del rang
+  let safety = 0;
+  while (cur <= endStr && safety < 500) {
+    if (cur >= startStr) dates.add(cur);
+    if (!task.recurrence || task.recurrence === 'none') break;
+    const nx = nextOccurrence(cur, task.recurrence);
+    if (!nx || (task.recurrenceEndDate && nx > task.recurrenceEndDate)) break;
+    cur = nx; safety++;
+  }
+  return dates;
+}
+
 function SeguimentView({tasks, completionLogs, lists}) {
   const [period, setPeriod] = useState('1m');
-  const periodDays = period==='1m'?30:period==='3m'?90:365;
 
-  const endDt   = new Date();
-  const startDt = new Date(); startDt.setDate(startDt.getDate()-periodDays+1);
+  const startDt = new Date();
+  const endDt = new Date();
+  if (period==='1m') endDt.setMonth(endDt.getMonth()+1);
+  else if (period==='3m') endDt.setMonth(endDt.getMonth()+3);
+  else endDt.setFullYear(endDt.getFullYear()+1);
+
+  const startStr = startDt.toISOString().split('T')[0];
+  const endStr   = endDt.toISOString().split('T')[0];
+
   const days = [];
   const d = new Date(startDt);
   while (d <= endDt) { days.push(d.toISOString().split('T')[0]); d.setDate(d.getDate()+1); }
 
   const trackedTasks = tasks.filter(t=>t.tracked);
 
-  // Build map: taskId → { date → count }
-  const logMap = {};
-  completionLogs.forEach(l=>{
-    if (!logMap[l.taskId]) logMap[l.taskId] = {};
-    logMap[l.taskId][l.date] = (logMap[l.taskId][l.date]||0)+1;
+  // Mapa d'ocurrències per tasca: taskId → Set<dateStr>
+  const occMap = {};
+  trackedTasks.forEach(t => {
+    occMap[t.id] = getTaskOccurrences(t, startStr, endStr);
   });
 
-  const logsInPeriod = completionLogs.filter(l=>l.date>=days[0]&&l.date<=days[days.length-1]);
-  const totalCompletions = logsInPeriod.length;
-  const uniqueDays = new Set(logsInPeriod.map(l=>l.date)).size;
+  // Mapa de completions per tasca: taskId → Set<dateStr>
+  const compMap = {};
+  completionLogs.forEach(l => {
+    if (l.date >= startStr && l.date <= endStr) {
+      if (!compMap[l.taskId]) compMap[l.taskId] = new Set();
+      compMap[l.taskId].add(l.date);
+    }
+  });
+
+  const allOccDays = new Set();
+  let totalOcc = 0, totalComp = 0;
+  trackedTasks.forEach(t => {
+    occMap[t.id].forEach(d => { allOccDays.add(d); totalOcc++; });
+    totalComp += (compMap[t.id]?.size||0);
+  });
 
   if (trackedTasks.length===0) return (
     <div className="seg-wrap">
@@ -1449,12 +1494,12 @@ function SeguimentView({tasks, completionLogs, lists}) {
 
       <div className="stats-cards">
         <div className="stats-card">
-          <div className="stats-card-num" style={{color:'var(--accent)'}}>{totalCompletions}</div>
-          <div className="stats-card-label">Completions al període</div>
+          <div className="stats-card-num" style={{color:'var(--success)'}}>{totalComp}<span style={{fontSize:14,color:'var(--text3)'}}> / {totalOcc}</span></div>
+          <div className="stats-card-label">Completions / Potencials</div>
         </div>
         <div className="stats-card">
-          <div className="stats-card-num" style={{color:'var(--success)'}}>{uniqueDays}</div>
-          <div className="stats-card-label">Dies amb activitat</div>
+          <div className="stats-card-num" style={{color:'var(--accent)'}}>{totalOcc>0?Math.round(totalComp/totalOcc*100):0}%</div>
+          <div className="stats-card-label">Taxa de compleció</div>
         </div>
         <div className="stats-card">
           <div className="stats-card-num" style={{color:'var(--warn)'}}>{trackedTasks.length}</div>
@@ -1465,9 +1510,18 @@ function SeguimentView({tasks, completionLogs, lists}) {
       {trackedTasks.map(task=>{
         const list = lists.find(l=>l.id===task.listId);
         const color = list?.color||'var(--accent)';
-        const taskLogs = logMap[task.id]||{};
-        const completionsInPeriod = days.filter(d=>taskLogs[d]>0).length;
+        const occs = occMap[task.id];
+        const comps = compMap[task.id]||new Set();
+        const occCount = occs.size;
+        const compCount = comps.size;
         const recLabel = RECURRENCE_OPTIONS.find(r=>r.value===task.recurrence&&task.recurrence!=='none')?.label;
+        // Heatmap: completed=1, scheduled-future=0.5, missed=-1
+        const logsForHeatmap = {};
+        occs.forEach(d => {
+          if (comps.has(d)) logsForHeatmap[d] = 1;        // completat
+          else if (d < startStr) logsForHeatmap[d] = -1;  // perdut (passat)
+          else logsForHeatmap[d] = 0.5;                   // pendent/futur
+        });
         return (
           <div key={task.id} className="tracked-card">
             <div className="tracked-task-header">
@@ -1478,10 +1532,10 @@ function SeguimentView({tasks, completionLogs, lists}) {
                 {recLabel&&<span className="recurrence-chip">🔁 {recLabel}</span>}
               </div>
               <span style={{fontSize:12,fontWeight:600,color:'var(--text2)',flexShrink:0}}>
-                {completionsInPeriod} dia{completionsInPeriod!==1?'es':''}
+                {compCount}/{occCount} completades
               </span>
             </div>
-            <Heatmap days={days} logs={taskLogs} color={color} period={period}/>
+            <Heatmap days={days} logs={logsForHeatmap} color={color} period={period}/>
           </div>
         );
       })}
@@ -1490,16 +1544,23 @@ function SeguimentView({tasks, completionLogs, lists}) {
 }
 
 function Heatmap({days, logs, color, period}) {
+  // logs[d]: 1=completat, 0.5=pendent/futur, -1=perdut, undefined=no programat
+  const sqColor = (d) => {
+    const v = logs[d];
+    if (v===1)   return {bg:color,     op:1,    title:'Completat'};
+    if (v===-1)  return {bg:'var(--danger)', op:0.5, title:'No completat'};
+    if (v===0.5) return {bg:color,     op:0.25, title:'Programat'};
+    return              {bg:'var(--border)',  op:0.2,  title:'—'};
+  };
+
   if (period==='1m') {
     return (
       <div>
         <div style={{display:'flex',gap:2,flexWrap:'wrap',marginBottom:4}}>
           {days.map(d=>{
-            const count = logs[d]||0;
-            return (
-              <div key={d} className="heatmap-sq" title={`${d}: ${count} completions`}
-                style={{width:16,height:16,background:count>0?color:'var(--border)',opacity:count>0?1:0.3}}/>
-            );
+            const {bg,op,title} = sqColor(d);
+            return <div key={d} className="heatmap-sq" title={`${fmt(d)}: ${title}`}
+              style={{width:16,height:16,background:bg,opacity:op}}/>;
           })}
         </div>
         <div style={{display:'flex',justifyContent:'space-between',fontSize:9,color:'var(--text3)',marginTop:2}}>
@@ -1511,8 +1572,8 @@ function Heatmap({days, logs, color, period}) {
   // Group into weeks (Mon-start)
   const weeks = [];
   let week = [];
-  const startDow = (new Date(days[0]+'T12:00').getDay()+6)%7; // 0=Mon
-  for (let i=0;i<startDow;i++) week.push(null); // pad
+  const startDow = (new Date(days[0]+'T12:00').getDay()+6)%7;
+  for (let i=0;i<startDow;i++) week.push(null);
   days.forEach(d=>{
     week.push(d);
     if (week.length===7) { weeks.push(week); week=[]; }
@@ -1527,12 +1588,9 @@ function Heatmap({days, logs, color, period}) {
           <div key={wi} style={{display:'flex',flexDirection:'column',gap:2}}>
             {w.map((d,di)=>{
               if (!d) return <div key={di} style={{width:sq,height:sq}}/>;
-              const count = logs[d]||0;
-              return (
-                <div key={d} className="heatmap-sq" title={`${d}: ${count} completions`}
-                  style={{width:sq,height:sq,background:count>0?color:'var(--border)',
-                  opacity:count>0?Math.min(0.35+count*0.35,1):0.25}}/>
-              );
+              const {bg,op,title} = sqColor(d);
+              return <div key={d} className="heatmap-sq" title={`${fmt(d)}: ${title}`}
+                style={{width:sq,height:sq,background:bg,opacity:op}}/>;
             })}
           </div>
         ))}
