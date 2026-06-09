@@ -1,0 +1,1550 @@
+<!DOCTYPE html>
+<html lang="ca" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tasques</title>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <script>
+    const firebaseConfig = {
+      apiKey:"AIzaSyAfvdx56XtiClvQU4lLuyBHPQsOeUBjUA0",
+      authDomain:"tasques-app.firebaseapp.com",
+      projectId:"tasques-app",
+      storageBucket:"tasques-app.firebasestorage.app",
+      messagingSenderId:"887341396041",
+      appId:"1:887341396041:web:35c0868610a36676ed0f98"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const auth = firebase.auth();
+  </script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#f4f6fb;--bg2:#eaecf5;--bg3:#d8dcee;
+      --sidebar:#ffffff;--card:#ffffff;--card-hover:#f0f2fa;--border:#dde0f0;
+      --accent:#4f8ef7;--accent2:#6fa3ff;
+      --text:#1a1a3e;--text2:#5555aa;--text3:#9999cc;
+      --danger:#f7604f;--success:#4fbe96;--warn:#f7b74f;
+    }
+    [data-theme="dark"]{
+      --bg:#1a1a2e;--bg2:#16213e;--bg3:#0f3460;
+      --sidebar:#12122a;--card:#1e1e38;--card-hover:#252545;--border:#2a2a4a;
+      --text:#e8e8f0;--text2:#9999bb;--text3:#6666aa;
+    }
+    body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden}
+    #root{height:100vh;display:flex}
+    .login-screen{flex:1;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--bg) 0%,var(--bg2) 100%)}
+    .login-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:48px 40px;text-align:center;width:380px;max-width:95vw;box-shadow:0 20px 60px rgba(79,142,247,.1);display:flex;flex-direction:column;align-items:center}
+    .login-logo{font-size:40px;margin-bottom:8px}
+    .login-card h1{font-size:24px;font-weight:600;margin-bottom:6px}
+    .login-card>p{font-size:14px;color:var(--text2);margin-bottom:24px}
+    .login-link{background:none;border:none;color:var(--text2);font-size:12px;cursor:pointer;font-family:inherit;text-decoration:underline;padding:0}
+    .login-link:hover{color:var(--accent)}
+    .login-note{font-size:11px;color:var(--text3);margin-top:16px}
+    .loading-screen{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px}
+    .spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .sidebar{width:240px;min-width:240px;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto}
+    .sidebar-header{padding:16px 16px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
+    .sidebar-logo{font-size:17px;font-weight:600;color:var(--accent);display:flex;align-items:center;gap:8px}
+    .sidebar-logo svg{width:18px;height:18px}
+    .sidebar-user{padding:10px;border-bottom:1px solid var(--border)}
+    .sidebar-user-top{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+    .sidebar-avatar{width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:white;background:var(--accent)}
+    .sidebar-user-name{font-size:12px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .btn-logout{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;padding:7px 10px;border-radius:8px;background:transparent;border:1px solid var(--border);color:var(--text2);font-size:12px;font-weight:500;font-family:inherit;cursor:pointer;transition:all .15s}
+    .btn-logout:hover{background:rgba(247,96,79,.08);border-color:var(--danger);color:var(--danger)}
+    .btn-logout svg{width:13px;height:13px}
+    .sidebar-section{padding:10px 8px 4px}
+    .sidebar-section-title{font-size:10px;font-weight:600;letter-spacing:.08em;color:var(--text3);text-transform:uppercase;padding:0 8px;margin-bottom:4px}
+    .sidebar-item{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;cursor:pointer;font-size:13px;color:var(--text2);transition:all .15s;user-select:none}
+    .sidebar-item:hover{background:var(--card-hover);color:var(--text)}
+    .sidebar-item.active{background:rgba(79,142,247,.12);color:var(--accent);font-weight:500}
+    .sidebar-item .badge{margin-left:auto;background:var(--bg3);color:var(--text2);font-size:11px;padding:1px 6px;border-radius:10px}
+    .sidebar-item.active .badge{background:rgba(79,142,247,.2);color:var(--accent)}
+    .sidebar-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+    .sidebar-gear{opacity:0;cursor:pointer;color:var(--text3);transition:all .15s;flex-shrink:0;padding:2px}
+    .sidebar-gear:hover{color:var(--accent)}
+    .sidebar-item:hover .sidebar-gear{opacity:1}
+    .sidebar-item.active .sidebar-gear{opacity:.6}
+    .add-list-btn{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;cursor:pointer;font-size:13px;color:var(--text3);background:none;border:none;font-family:inherit;width:100%;transition:all .15s}
+    .add-list-btn:hover{background:var(--card-hover);color:var(--text)}
+    .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+    .topbar{padding:13px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:var(--bg)}
+    .topbar-title{font-size:17px;font-weight:600;flex:1}
+    .view-toggle{display:flex;gap:2px;background:var(--bg2);border-radius:8px;padding:3px}
+    .view-btn{padding:5px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:none;background:transparent;color:var(--text2);font-family:inherit;transition:all .15s;display:flex;align-items:center;gap:5px}
+    .view-btn svg{width:13px;height:13px}
+    .view-btn.active{background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+    .btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;border:none;transition:all .15s;font-family:inherit}
+    .btn-primary{background:var(--accent);color:#fff}
+    .btn-primary:hover{background:var(--accent2)}
+    .btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border)}
+    .btn-ghost:hover{background:var(--card-hover);color:var(--text)}
+    .btn-icon{padding:7px;border-radius:8px}
+    .btn-danger-soft{background:transparent;color:var(--danger);border:1px solid transparent}
+    .btn-danger-soft:hover{background:rgba(247,96,79,.1);border-color:var(--danger)}
+    .filters{padding:8px 24px;display:flex;gap:6px;border-bottom:1px solid var(--border);flex-wrap:wrap;align-items:center}
+    .filter-chip{padding:3px 11px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border);color:var(--text2);background:transparent;transition:all .15s;font-family:inherit}
+    .filter-chip:hover{border-color:var(--accent);color:var(--accent)}
+    .filter-chip.active{background:rgba(79,142,247,.12);border-color:var(--accent);color:var(--accent)}
+    .filter-sep{color:var(--text3);font-size:12px;margin:0 2px}
+    .content{flex:1;overflow-y:auto;padding:14px 24px}
+    .task-group-title{font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--text3);margin:14px 0 7px}
+    .task-item{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:10px;background:var(--card);border:1px solid var(--border);margin-bottom:5px;cursor:pointer;transition:all .15s;animation:fadeIn .15s ease}
+    .task-item:hover{border-color:var(--accent);background:var(--card-hover)}
+    .task-item.selected{border-color:var(--accent);box-shadow:0 0 0 2px rgba(79,142,247,.15)}
+    .task-item.done{opacity:.5}
+    .task-item.done .task-title{text-decoration:line-through;color:var(--text3)}
+    .task-check{width:18px;height:18px;border-radius:50%;border:2px solid var(--border);flex-shrink:0;margin-top:2px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
+    .task-check:hover{border-color:var(--accent)}
+    .task-check.checked{background:var(--success);border-color:var(--success)}
+    .task-check.checked svg{display:block}
+    .task-check svg{display:none;width:10px;height:10px;color:white}
+    .task-body{flex:1;min-width:0}
+    .task-title{font-size:14px;font-weight:500;margin-bottom:4px}
+    .task-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+    .task-meta-item{display:flex;align-items:center;gap:3px;font-size:11px;color:var(--text3)}
+    .task-meta-item svg{width:11px;height:11px}
+    .priority-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+    .p-alta{background:var(--danger)}.p-mitjana{background:var(--warn)}.p-baixa{background:var(--success)}
+    .tag{padding:1px 7px;border-radius:10px;font-size:11px;font-weight:500}
+    .status-badge{padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500}
+    .s-pendent{background:rgba(153,153,187,.12);color:var(--text2)}
+    .s-en-curs{background:rgba(79,142,247,.12);color:var(--accent)}
+    .s-completada{background:rgba(79,190,150,.12);color:var(--success)}
+    .progress-bar{height:3px;background:var(--border);border-radius:2px;overflow:hidden;margin-top:5px}
+    .progress-fill{height:100%;background:var(--accent);border-radius:2px;transition:width .3s}
+    /* task actions */
+    .task-actions{display:flex;gap:3px;flex-shrink:0;align-items:center;margin-top:1px}
+    .delay-btn{padding:2px 6px;border-radius:5px;font-size:10px;font-weight:700;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--text2);font-family:inherit;transition:all .12s;white-space:nowrap;line-height:1.6}
+    .delay-btn:hover{border-color:var(--warn);color:var(--warn);background:rgba(247,183,79,.08)}
+    .track-btn{padding:4px;border-radius:6px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .12s;color:var(--text3)}
+    .track-btn:hover{color:var(--accent)}
+    .track-btn.on{color:var(--accent)}
+    .track-btn svg{width:13px;height:13px}
+    .recurrence-chip{font-size:10px;padding:1px 5px;border-radius:8px;background:rgba(79,190,150,.12);color:var(--success);font-weight:500}
+    /* detail panel */
+    .detail-panel{width:320px;min-width:320px;border-left:1px solid var(--border);background:var(--sidebar);display:flex;flex-direction:column;overflow-y:auto}
+    .detail-header{padding:13px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+    .detail-header h3{font-size:14px;font-weight:600}
+    .detail-body{padding:16px;display:flex;flex-direction:column;gap:12px}
+    .detail-field label{display:block;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:5px}
+    .detail-title-input{width:100%;background:transparent;border:none;color:var(--text);font-size:15px;font-weight:600;font-family:inherit;outline:none;padding:0}
+    .detail-desc{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;padding:9px 11px;resize:vertical;min-height:60px;outline:none}
+    .detail-desc:focus{border-color:var(--accent)}
+    .detail-select{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;padding:7px 10px;outline:none;cursor:pointer}
+    .detail-select:focus{border-color:var(--accent)}
+    .detail-date{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;padding:7px 10px;outline:none}
+    .detail-date:focus{border-color:var(--accent)}
+    .detail-input{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;padding:7px 10px;outline:none}
+    .detail-input:focus{border-color:var(--accent)}
+    .detail-checkbox{width:16px;height:16px;cursor:pointer;accent-color:var(--accent)}
+    .custom-fields-section{border-top:1px solid var(--border);padding-top:12px}
+    .custom-fields-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+    .custom-fields-title span{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text3)}
+    .tag-input-wrap{display:flex;flex-wrap:wrap;gap:5px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:6px 8px}
+    .tag-input-wrap:focus-within{border-color:var(--accent)}
+    .tag-input{background:transparent;border:none;outline:none;color:var(--text);font-size:12px;font-family:inherit;flex:1;min-width:60px}
+    .tag-pill{display:flex;align-items:center;gap:3px;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:500}
+    .tag-pill button{background:none;border:none;cursor:pointer;color:inherit;opacity:.6;padding:0;font-size:13px;line-height:1}
+    .tag-pill button:hover{opacity:1}
+    .subtask-editor{display:flex;flex-direction:column;gap:5px}
+    .subtask-row{display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--bg2);border-radius:6px}
+    .subtask-row input{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:inherit;font-size:13px}
+    .subtask-row .del{color:var(--text3);cursor:pointer;font-size:16px;line-height:1}
+    .subtask-row .del:hover{color:var(--danger)}
+    .subtask-check{width:14px;height:14px;border-radius:3px;border:1.5px solid var(--border);flex-shrink:0;cursor:pointer;transition:all .15s}
+    .subtask-check:hover{border-color:var(--accent)}
+    .subtask-check.checked{background:var(--success);border-color:var(--success)}
+    .subtask-check.checked::after{content:'✓';color:white;font-size:9px;line-height:1;display:flex;align-items:center;justify-content:center}
+    .add-subtask-btn{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--accent);cursor:pointer;background:none;border:none;font-family:inherit;padding:4px 0}
+    .add-subtask-btn:hover{opacity:.8}
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(4px)}
+    .modal{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;width:500px;max-width:95vw;display:flex;flex-direction:column;gap:14px;box-shadow:0 20px 60px rgba(0,0,0,.15);max-height:90vh;overflow-y:auto}
+    .modal-sm{width:380px}
+    .modal h2{font-size:16px;font-weight:600}
+    .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:2px}
+    .modal-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin:-4px -24px 0;padding:0 24px}
+    .modal-tab{padding:10px 16px;font-size:13px;font-weight:500;cursor:pointer;border:none;background:transparent;color:var(--text2);font-family:inherit;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s}
+    .modal-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+    .input{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;padding:9px 12px;outline:none}
+    .input:focus{border-color:var(--accent)}
+    .input-row{display:flex;gap:10px}
+    .field-row{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg2);border-radius:8px;margin-bottom:6px}
+    .field-row-name{flex:1;font-size:13px;font-weight:500}
+    .field-type-badge{font-size:10px;padding:2px 7px;border-radius:10px;background:var(--bg3);color:var(--text3);font-weight:500}
+    .field-actions{display:flex;gap:4px}
+    .field-action-btn{padding:4px;border-radius:6px;border:none;background:transparent;cursor:pointer;color:var(--text3);display:flex;align-items:center;justify-content:center;transition:all .15s}
+    .field-action-btn:hover{background:var(--card);color:var(--text)}
+    .field-action-btn.danger:hover{color:var(--danger)}
+    .field-action-btn svg{width:13px;height:13px}
+    .add-field-form{display:flex;flex-direction:column;gap:8px;padding:10px;background:var(--bg2);border-radius:8px;border:1px dashed var(--border)}
+    .option-row{display:flex;gap:6px;align-items:center}
+    .option-row input{flex:1}
+    .option-del{background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;line-height:1;padding:0 4px}
+    .option-del:hover{color:var(--danger)}
+    .cal-wrap{flex:1;overflow-y:auto;padding:16px 24px}
+    .cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+    .cal-nav h2{font-size:16px;font-weight:600;text-transform:capitalize}
+    .cal-nav-btn{padding:6px 10px;border-radius:7px;border:1px solid var(--border);background:var(--card);color:var(--text2);cursor:pointer;font-size:14px;transition:all .15s}
+    .cal-nav-btn:hover{background:var(--card-hover);color:var(--text)}
+    .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+    .cal-dow{text-align:center;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;padding:6px 0}
+    .cal-day{min-height:90px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:6px;cursor:pointer;transition:all .15s;position:relative}
+    .cal-day:hover{border-color:var(--accent);background:var(--card-hover)}
+    .cal-day.today{border-color:var(--accent);background:rgba(79,142,247,.04)}
+    .cal-day.other-month{opacity:.4}
+    .cal-day-num{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:50%}
+    .cal-day.today .cal-day-num{background:var(--accent);color:white}
+    .cal-task-chip{font-size:10px;font-weight:500;padding:2px 6px;border-radius:4px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;transition:opacity .1s}
+    .cal-task-chip:hover{opacity:.75}
+    .cal-more{font-size:10px;color:var(--text3);margin-top:2px}
+    .cal-day-tasks-popup{position:absolute;top:100%;left:0;z-index:50;min-width:200px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px;box-shadow:0 8px 30px rgba(0,0,0,.15);margin-top:4px}
+    .cal-day-tasks-popup h4{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px}
+    .cal-popup-task{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:7px;cursor:pointer;transition:background .1s;font-size:12px}
+    .cal-popup-task:hover{background:var(--card-hover)}
+    .color-opts{display:flex;gap:6px;flex-wrap:wrap}
+    .color-opt{width:22px;height:22px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:all .1s}
+    .color-opt.selected{border-color:#333;transform:scale(1.15)}
+    .kbd{display:inline-flex;align-items:center;padding:1px 5px;background:var(--bg3);border-radius:4px;font-size:10px;color:var(--text3);font-family:monospace}
+    .sync-dot{width:6px;height:6px;border-radius:50%;background:var(--success);display:inline-block;margin-left:6px}
+    .sync-dot.syncing{background:var(--warn);animation:pulse 1s infinite}
+    .empty-state{text-align:center;padding:60px 20px;color:var(--text3)}
+    .empty-state svg{width:44px;height:44px;opacity:.25;margin-bottom:12px}
+    .empty-state p{font-size:14px}
+    .divider{height:1px;background:var(--border);margin:4px 0}
+    /* seguiment */
+    .seg-wrap{flex:1;overflow-y:auto;padding:16px 24px}
+    .seg-period{display:flex;gap:6px}
+    .stats-cards{display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+    .stats-card{padding:10px 16px;background:var(--card);border:1px solid var(--border);border-radius:10px}
+    .stats-card-num{font-size:22px;font-weight:700;line-height:1.1}
+    .stats-card-label{font-size:11px;color:var(--text3);margin-top:2px}
+    .tracked-card{padding:12px 14px;background:var(--card);border:1px solid var(--border);border-radius:10px;margin-bottom:10px}
+    .heatmap-sq{border-radius:2px;cursor:default;flex-shrink:0;transition:opacity .1s}
+    .heatmap-sq:hover{outline:1px solid var(--accent)}
+    /* date badges */
+    .date-badge{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:600;padding:2px 7px;border-radius:6px;white-space:nowrap}
+    .date-badge svg{width:10px;height:10px}
+    .date-overdue{background:rgba(247,96,79,.15);color:var(--danger)}
+    .date-today{background:rgba(247,183,79,.18);color:#c97d00}
+    [data-theme="dark"] .date-today{color:var(--warn)}
+    .date-tomorrow{background:rgba(79,142,247,.12);color:var(--accent)}
+    .date-soon{background:rgba(153,153,187,.1);color:var(--text2)}
+    .date-later{background:transparent;color:var(--text3)}
+    /* group header */
+    .date-group-header{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--text3);margin:16px 0 7px;padding-bottom:5px;border-bottom:1px solid var(--border)}
+    .date-group-header .dgh-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+    .date-group-header .dgh-count{font-size:11px;font-weight:500;padding:1px 6px;border-radius:8px;background:var(--bg2);color:var(--text3);margin-left:auto}
+    ::-webkit-scrollbar{width:5px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+    .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 18px;font-size:13px;font-weight:500;box-shadow:0 8px 30px rgba(0,0,0,.2);z-index:200;display:flex;align-items:center;gap:8px;color:var(--text);animation:toastIn .2s ease;white-space:nowrap}
+    @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+const uid = () => Math.random().toString(36).slice(2,10);
+const TAG_COLORS = [
+  {bg:'rgba(79,142,247,.15)',text:'#4f8ef7'},{bg:'rgba(79,190,150,.15)',text:'#4fbe96'},
+  {bg:'rgba(247,183,79,.15)',text:'#f7b74f'},{bg:'rgba(247,96,79,.15)',text:'#f7604f'},
+  {bg:'rgba(175,79,247,.15)',text:'#af4ff7'},{bg:'rgba(79,215,247,.15)',text:'#4fd7f7'},
+];
+const LIST_COLORS = ['#4f8ef7','#4fbe96','#f7b74f','#f7604f','#af4ff7','#4fd7f7','#ff8fab','#a8e6cf'];
+const FIELD_TYPES = [
+  {value:'text',label:'Text'},{value:'number',label:'Número'},
+  {value:'select',label:'Desplegable'},{value:'date',label:'Data'},
+  {value:'checkbox',label:'Checkbox'},{value:'url',label:'URL'},
+];
+const RECURRENCE_OPTIONS = [
+  {value:'none',label:'No es repeteix'},
+  {value:'daily',label:'Diàriament'},
+  {value:'weekdays',label:'Dies laborals (Dl-Dv)'},
+  {value:'weekly',label:'Setmanalment'},
+  {value:'monthly',label:'Mensualment'},
+];
+const REMINDER_OPTIONS = [
+  {value:0,label:'Sense recordatori'},
+  {value:5,label:'5 minuts abans'},
+  {value:15,label:'15 minuts abans'},
+  {value:30,label:'30 minuts abans'},
+  {value:60,label:'1 hora abans'},
+  {value:120,label:'2 hores abans'},
+  {value:1440,label:'1 dia abans'},
+];
+const tagColor = t => TAG_COLORS[Math.abs([...t].reduce((a,c)=>a+c.charCodeAt(0),0))%TAG_COLORS.length];
+const fmt = d => d ? new Date(d+'T12:00').toLocaleDateString('ca-ES',{day:'2-digit',month:'short'}) : '';
+const today = new Date().toISOString().split('T')[0];
+const isOverdue = t => t.endDate && t.endDate < today && t.status !== 'completada';
+const tomorrowStr = (() => { const d=new Date(); d.setDate(d.getDate()+1); return d.toISOString().split('T')[0]; })();
+const weekLaterStr = (() => { const d=new Date(); d.setDate(d.getDate()+7); return d.toISOString().split('T')[0]; })();
+const dateCategory = t => {
+  if (!t.endDate) return 'nodate';
+  if (t.endDate < today) return 'overdue';
+  if (t.endDate === today) return 'today';
+  if (t.endDate === tomorrowStr) return 'tomorrow';
+  if (t.endDate <= weekLaterStr) return 'soon';
+  return 'later';
+};
+const DATE_GROUPS = [
+  { key:'overdue',  label:'Vençudes',       dot:'var(--danger)',  cls:'date-overdue'  },
+  { key:'today',    label:'Avui',           dot:'var(--warn)',    cls:'date-today'    },
+  { key:'tomorrow', label:'Demà',           dot:'var(--accent)',  cls:'date-tomorrow' },
+  { key:'soon',     label:'Pròxims 7 dies', dot:'var(--text2)',   cls:'date-soon'     },
+  { key:'later',    label:'Més endavant',   dot:'var(--text3)',   cls:'date-later'    },
+  { key:'nodate',   label:'Sense data',     dot:'var(--border)',  cls:'date-later'    },
+];
+const save = (k,v) => { try{localStorage.setItem(k,JSON.stringify(v))}catch{} };
+const load = (k,d) => { try{return JSON.parse(localStorage.getItem(k))??d}catch{return d} };
+
+const nextOccurrence = (dateStr, recurrence) => {
+  const d = new Date(dateStr + 'T12:00');
+  switch(recurrence) {
+    case 'daily': d.setDate(d.getDate()+1); break;
+    case 'weekly': d.setDate(d.getDate()+7); break;
+    case 'monthly': d.setMonth(d.getMonth()+1); break;
+    case 'weekdays':
+      do { d.setDate(d.getDate()+1); } while ([0,6].includes(d.getDay()));
+      break;
+    default: return null;
+  }
+  return d.toISOString().split('T')[0];
+};
+
+const Ic = {
+  check:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>,
+  plus:     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+  x:        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+  calendar: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
+  list:     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>,
+  inbox:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z"/></svg>,
+  today:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+  moon:     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>,
+  sun:      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>,
+  trash:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>,
+  gear:     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>,
+  logout:   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>,
+  folder:   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>,
+  chevL:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>,
+  chevR:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>,
+  drag:     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg>,
+  clock:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+  bell:     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>,
+  repeat:   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>,
+  bookmark: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>,
+  bmark:    <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>,
+  chart:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+};
+
+// ─── LOGIN ────────────────────────────────────────────────────────────────────
+function LoginScreen() {
+  const [mode,setMode]         = useState('login');
+  const [email,setEmail]       = useState('');
+  const [password,setPassword] = useState('');
+  const [confirm,setConfirm]   = useState('');
+  const [loading,setLoading]   = useState(false);
+  const [error,setError]       = useState('');
+  const [info,setInfo]         = useState('');
+  const reset = () => { setError(''); setInfo(''); };
+  const submit = async () => {
+    reset(); setLoading(true);
+    try {
+      if (mode==='login') {
+        await auth.signInWithEmailAndPassword(email, password);
+      } else if (mode==='register') {
+        if (password!==confirm) { setError('Les contrasenyes no coincideixen.'); setLoading(false); return; }
+        if (password.length<6)  { setError('Mínim 6 caràcters.'); setLoading(false); return; }
+        await auth.createUserWithEmailAndPassword(email, password);
+      } else {
+        await auth.sendPasswordResetEmail(email);
+        setInfo('Correu de recuperació enviat!'); setLoading(false); return;
+      }
+    } catch(e) {
+      const msgs = {
+        'auth/user-not-found':'No existeix cap compte amb aquest correu.',
+        'auth/wrong-password':'Contrasenya incorrecta.',
+        'auth/email-already-in-use':'Aquest correu ja està registrat.',
+        'auth/invalid-email':'Correu no vàlid.',
+        'auth/too-many-requests':'Massa intents. Espera uns minuts.',
+        'auth/invalid-credential':'Correu o contrasenya incorrectes.',
+      };
+      setError(msgs[e.code]||e.message);
+    }
+    setLoading(false);
+  };
+  const titles = {login:'Inicia sessió',register:'Crea un compte',reset:'Recupera la contrasenya'};
+  return (
+    <div className="login-screen">
+      <div className="login-card">
+        <div className="login-logo">✅</div>
+        <h1>Tasques</h1>
+        <p>{titles[mode]}</p>
+        <div style={{display:'flex',flexDirection:'column',gap:10,width:'100%',marginBottom:12}}>
+          <input className="input" type="email" placeholder="Correu electrònic" value={email}
+            onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()} autoFocus/>
+          {mode!=='reset' && <input className="input" type="password" placeholder="Contrasenya" value={password}
+            onChange={e=>setPassword(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()}/>}
+          {mode==='register' && <input className="input" type="password" placeholder="Confirma la contrasenya" value={confirm}
+            onChange={e=>setConfirm(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()}/>}
+          {error && <p style={{color:'var(--danger)',fontSize:12}}>{error}</p>}
+          {info  && <p style={{color:'var(--success)',fontSize:12}}>{info}</p>}
+          <button className="btn btn-primary" style={{width:'100%',justifyContent:'center',padding:10}}
+            onClick={submit} disabled={loading}>{loading?'Un moment...':titles[mode]}</button>
+        </div>
+        {mode==='login' && <>
+          <button className="login-link" onClick={()=>{setMode('register');reset();}}>No tens compte? Registra't</button>
+          <button className="login-link" style={{marginTop:6}} onClick={()=>{setMode('reset');reset();}}>Has oblidat la contrasenya?</button>
+        </>}
+        {mode!=='login' && <button className="login-link" onClick={()=>{setMode('login');reset();}}>← Torna a iniciar sessió</button>}
+        <p className="login-note">Les teves dades es sincronitzen automàticament</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── APP ──────────────────────────────────────────────────────────────────────
+function App() {
+  const [user,setUser]               = useState(undefined);
+  const [tasks,setTasks]             = useState([]);
+  const [lists,setLists]             = useState([]);
+  const [defaultFields,setDefaultFields] = useState([]);
+  const [completionLogs,setCompletionLogs] = useState([]);
+  const [syncing,setSyncing]         = useState(false);
+  const [toast,setToast]             = useState('');
+  const showToast = msg => { setToast(msg); setTimeout(()=>setToast(''),3000); };
+  const [selectedList,setSelectedList]   = useState('all');
+  const [selectedTask,setSelectedTask]   = useState(null);
+  const [filterStatus,setFilterStatus]   = useState('all');
+  const [filterPriority,setFilterPriority] = useState('all');
+  const [filterTag,setFilterTag]         = useState('all');
+  const [showModal,setShowModal]         = useState(false);
+  const [showListModal,setShowListModal] = useState(false);
+  const [editingList,setEditingList]     = useState(null);
+  const [showDefaultFields,setShowDefaultFields] = useState(false);
+  const [darkMode,setDarkMode]           = useState(()=>load('tq_dark',false));
+  const [view,setView]                   = useState('list');
+
+  useEffect(()=>auth.onAuthStateChanged(u=>setUser(u??null)),[]);
+
+  useEffect(()=>{
+    if (!user) return;
+    const oneYearAgo = new Date(); oneYearAgo.setFullYear(oneYearAgo.getFullYear()-1);
+    const yearAgoStr = oneYearAgo.toISOString().split('T')[0];
+    const unsubT = db.collection('tasks').where('ownerId','==',user.uid)
+      .onSnapshot(snap=>{
+        setTasks(snap.docs.map(d=>({id:d.id,...d.data()}))
+          .sort((a,b)=>(b.createdAt?.toMillis?.()??0)-(a.createdAt?.toMillis?.()??0)));
+      });
+    const unsubL = db.collection('lists').where('ownerId','==',user.uid)
+      .onSnapshot(snap=>{
+        setLists(snap.docs.map(d=>({id:d.id,...d.data()}))
+          .sort((a,b)=>(a.createdAt?.toMillis?.()??0)-(b.createdAt?.toMillis?.()??0)));
+      });
+    const unsubS = db.collection('userSettings').doc(user.uid)
+      .onSnapshot(snap=>{ if(snap.exists) setDefaultFields(snap.data().defaultFields||[]); });
+    const unsubCL = db.collection('completionLogs')
+      .where('ownerId','==',user.uid).where('date','>=',yearAgoStr)
+      .onSnapshot(snap=>{ setCompletionLogs(snap.docs.map(d=>({id:d.id,...d.data()}))); });
+    return ()=>{unsubT();unsubL();unsubS();unsubCL();};
+  },[user]);
+
+  useEffect(()=>{
+    document.documentElement.setAttribute('data-theme',darkMode?'dark':'light');
+    save('tq_dark',darkMode);
+  },[darkMode]);
+
+  useEffect(()=>{
+    if (!user) return;
+    const h = e => {
+      if (e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT') return;
+      if (e.key==='n'){e.preventDefault();setShowModal(true);}
+      if (e.key===' '&&selectedTask){e.preventDefault();toggleStatus(selectedTask.id,selectedTask.status);}
+      if (e.key==='Escape'){setSelectedTask(null);setShowModal(false);}
+    };
+    window.addEventListener('keydown',h);
+    return ()=>window.removeEventListener('keydown',h);
+  },[user,selectedTask]);
+
+  useEffect(()=>{
+    if (selectedTask) {
+      const fresh = tasks.find(t=>t.id===selectedTask.id);
+      if (fresh) setSelectedTask(fresh);
+    }
+  },[tasks]);
+
+  // Notification service
+  useEffect(()=>{
+    if (!user||tasks.length===0) return;
+    const checkReminders = () => {
+      if (!('Notification' in window)||Notification.permission!=='granted') return;
+      const now = new Date();
+      const notifiedKey = `tq_notif_${user.uid}`;
+      const notified = load(notifiedKey,[]);
+      tasks.forEach(task=>{
+        if (!task.reminderMinutes||task.status==='completada'||!task.endDate) return;
+        const endTime = task.endTime||'23:59';
+        const endDt = new Date(`${task.endDate}T${endTime}`);
+        const remDt = new Date(endDt.getTime() - task.reminderMinutes*60000);
+        const diff = now - remDt;
+        if (diff>=0 && diff<90000) {
+          const nid = `${task.id}_${remDt.getTime()}`;
+          if (!notified.includes(nid)) {
+            const label = task.reminderMinutes<60
+              ? `${task.reminderMinutes} min`
+              : task.reminderMinutes===60?'1 hora':'2 hores';
+            new Notification(`⏰ ${task.title}`,{body:`Recordatori: vença en ${label}`});
+            save(notifiedKey,[...notified.slice(-100),nid]);
+          }
+        }
+      });
+    };
+    const hasReminders = tasks.some(t=>t.reminderMinutes>0&&t.status!=='completada');
+    if (hasReminders && 'Notification' in window && Notification.permission==='default') {
+      Notification.requestPermission();
+    }
+    checkReminders();
+    const iv = setInterval(checkReminders,60000);
+    return ()=>clearInterval(iv);
+  },[user,tasks]);
+
+  if (user===undefined) return <div className="loading-screen"><div className="spinner"/><span style={{fontSize:13,color:'var(--text3)'}}>Carregant...</span></div>;
+  if (!user) return <LoginScreen/>;
+
+  const addTask = async data => {
+    setSyncing(true);
+    await db.collection('tasks').add({...data,ownerId:user.uid,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+    setSyncing(false); setShowModal(false);
+  };
+  const updateTask = async updated => {
+    const {id,...data} = updated;
+    setSyncing(true);
+    await db.collection('tasks').doc(id).update(data);
+    setSyncing(false); setSelectedTask(updated);
+  };
+  const deleteTask = async id => {
+    await db.collection('tasks').doc(id).delete();
+    if (selectedTask?.id===id) setSelectedTask(null);
+  };
+  const toggleStatus = async (id,current) => {
+    const task = tasks.find(t=>t.id===id); if (!task) return;
+    if (current!=='completada') {
+      // Log if tracked
+      if (task.tracked) {
+        await db.collection('completionLogs').add({
+          ownerId:user.uid, taskId:id, taskTitle:task.title,
+          date:today, completedAt:firebase.firestore.FieldValue.serverTimestamp()
+        });
+      }
+      // Handle recurrence
+      if (task.recurrence && task.recurrence!=='none') {
+        const base = task.endDate||today;
+        const next = nextOccurrence(base, task.recurrence);
+        // End reached if: current occurrence is at/past end date, OR next would exceed it
+        const currentPastEnd = task.recurrenceEndDate && base >= task.recurrenceEndDate;
+        const nextPastEnd    = task.recurrenceEndDate && next && next > task.recurrenceEndDate;
+        const endReached     = currentPastEnd || nextPastEnd;
+        if (next && !endReached) {
+          await db.collection('tasks').doc(id).update({status:'pendent',endDate:next,lastCompleted:today});
+          showToast(`✓ Completada! Propera: ${fmt(next)}`);
+          return;
+        }
+        // Fi de la repetició assolida → cau cap a completada
+      }
+      await db.collection('tasks').doc(id).update({status:'completada'});
+    } else {
+      await db.collection('tasks').doc(id).update({status:'pendent'});
+    }
+  };
+  const delayTask = async (task, type) => {
+    const base = task.endDate||today;
+    const baseTime = task.endTime || new Date().toTimeString().slice(0,5);
+    if (type==='1h') {
+      const dt = new Date(`${base}T${baseTime}`);
+      dt.setHours(dt.getHours()+1);
+      await db.collection('tasks').doc(task.id).update({
+        endDate: dt.toISOString().split('T')[0],
+        endTime: dt.toTimeString().slice(0,5)
+      });
+    } else {
+      const dt = new Date(base+'T12:00');
+      dt.setDate(dt.getDate()+1);
+      await db.collection('tasks').doc(task.id).update({endDate:dt.toISOString().split('T')[0]});
+    }
+  };
+  const toggleTrack = async task => {
+    await db.collection('tasks').doc(task.id).update({tracked:!task.tracked});
+  };
+  const addList = async data => {
+    const fields = defaultFields.map(f=>({...f,id:uid()}));
+    await db.collection('lists').add({...data,fields,ownerId:user.uid,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+    setShowListModal(false);
+  };
+  const updateList = async (id,data) => {
+    await db.collection('lists').doc(id).update(data); setEditingList(null);
+  };
+  const deleteList = async id => {
+    await db.collection('lists').doc(id).delete();
+    const batch = db.batch();
+    tasks.filter(t=>t.listId===id).forEach(t=>batch.delete(db.collection('tasks').doc(t.id)));
+    await batch.commit();
+    if (selectedList===id) setSelectedList('all');
+  };
+  const saveDefaultFields = async fields => {
+    await db.collection('userSettings').doc(user.uid).set({defaultFields:fields},{merge:true});
+    setShowDefaultFields(false);
+  };
+
+  const allTags = [...new Set(tasks.flatMap(t=>t.tags||[]))];
+  const filtered = tasks.filter(t=>{
+    if (selectedList==='today'){if(t.startDate!==today&&t.endDate!==today)return false;}
+    else if (selectedList!=='all'&&selectedList!=='seguiment'){if(t.listId!==selectedList)return false;}
+    if (filterStatus!=='all'&&t.status!==filterStatus) return false;
+    if (filterPriority!=='all'&&t.priority!==filterPriority) return false;
+    if (filterTag!=='all'&&!(t.tags||[]).includes(filterTag)) return false;
+    return true;
+  });
+  const pendents    = filtered.filter(t=>t.status!=='completada');
+  const completades = filtered.filter(t=>t.status==='completada');
+  const countFor = id => tasks.filter(t=>id==='today'
+    ?(t.startDate===today||t.endDate===today)&&t.status!=='completada'
+    :t.listId===id&&t.status!=='completada').length;
+  const listName = selectedList==='all'?'Totes les tasques'
+    :selectedList==='today'?'Avui'
+    :selectedList==='seguiment'?'Seguiment'
+    :lists.find(l=>l.id===selectedList)?.name??'';
+
+  return (
+    <>
+      <div style={{display:'flex',height:'100vh'}}>
+        <aside className="sidebar">
+          <div className="sidebar-header">
+            <span className="sidebar-logo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+              </svg>
+              Tasques
+              <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
+            </span>
+            <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
+              {darkMode?Ic.sun:Ic.moon}
+            </button>
+          </div>
+          <div className="sidebar-user">
+            <div className="sidebar-user-top">
+              <div className="sidebar-avatar">{(user.email?.[0]??'?').toUpperCase()}</div>
+              <span className="sidebar-user-name" title={user.email}>{user.email}</span>
+            </div>
+            <button className="btn-logout" onClick={()=>auth.signOut()}>{Ic.logout} Tancar sessió</button>
+          </div>
+          <div className="sidebar-section">
+            <SidebarItem icon={Ic.inbox} label="Totes" count={tasks.filter(t=>t.status!=='completada').length}
+              active={selectedList==='all'} onClick={()=>setSelectedList('all')}/>
+            <SidebarItem icon={Ic.today} label="Avui" count={countFor('today')}
+              active={selectedList==='today'} onClick={()=>setSelectedList('today')}/>
+            <SidebarItem icon={Ic.chart} label="Seguiment"
+              active={selectedList==='seguiment'} onClick={()=>setSelectedList('seguiment')}/>
+          </div>
+          <div className="sidebar-section">
+            <div className="sidebar-section-title">Llistes</div>
+            {lists.map(l=>(
+              <SidebarItem key={l.id} dot={l.color} label={l.name} count={countFor(l.id)}
+                active={selectedList===l.id} onClick={()=>setSelectedList(l.id)}
+                onSettings={()=>setEditingList(l)} onDelete={()=>deleteList(l.id)}/>
+            ))}
+            <button className="add-list-btn" onClick={()=>setShowListModal(true)}>
+              <span style={{fontSize:16}}>+</span> Nova llista
+            </button>
+          </div>
+          {allTags.length>0 && (
+            <div className="sidebar-section">
+              <div className="sidebar-section-title">Etiquetes</div>
+              {allTags.map(tag=>{
+                const c=tagColor(tag);
+                return <SidebarItem key={tag} dot={c.text} label={tag}
+                  active={filterTag===tag} onClick={()=>setFilterTag(ft=>ft===tag?'all':tag)}/>;
+              })}
+            </div>
+          )}
+          <div style={{flex:1}}/>
+          <div style={{padding:'10px 8px',borderTop:'1px solid var(--border)'}}>
+            <button className="sidebar-item" style={{width:'100%',color:'var(--text3)'}}
+              onClick={()=>setShowDefaultFields(true)}>
+              <span style={{width:14,height:14}}>{Ic.gear}</span>
+              <span style={{fontSize:12}}>Camps per defecte</span>
+            </button>
+            <div style={{padding:'8px 10px',fontSize:'10px',color:'var(--text3)'}}>
+              <span className="kbd">n</span> nova &nbsp;·&nbsp; <span className="kbd">espai</span> completar
+            </div>
+          </div>
+        </aside>
+
+        <div className="main">
+          <div className="topbar">
+            <div className="topbar-title">{listName}</div>
+            {selectedList!=='seguiment' && <>
+              <div className="view-toggle">
+                <button className={`view-btn ${view==='list'?'active':''}`} onClick={()=>setView('list')}>
+                  <span style={{width:13,height:13}}>{Ic.list}</span> Llista
+                </button>
+                <button className={`view-btn ${view==='calendar'?'active':''}`} onClick={()=>setView('calendar')}>
+                  <span style={{width:13,height:13}}>{Ic.calendar}</span> Calendari
+                </button>
+              </div>
+              <button className="btn btn-primary" onClick={()=>setShowModal(true)}>{Ic.plus} Nova tasca</button>
+            </>}
+          </div>
+
+          {selectedList==='seguiment' ? (
+            <SeguimentView tasks={tasks} completionLogs={completionLogs} lists={lists}/>
+          ) : view==='list' ? (<>
+            <div className="filters">
+              <span style={{fontSize:'11px',color:'var(--text3)'}}>Estat:</span>
+              {[['all','Totes'],['pendent','Pendent'],['en-curs','En curs'],['completada','Completada']].map(([v,l])=>(
+                <button key={v} className={`filter-chip ${filterStatus===v?'active':''}`} onClick={()=>setFilterStatus(v)}>{l}</button>
+              ))}
+              <span className="filter-sep">|</span>
+              <span style={{fontSize:'11px',color:'var(--text3)'}}>Prioritat:</span>
+              {[['all','Totes'],['alta','Alta'],['mitjana','Mitjana'],['baixa','Baixa']].map(([v,l])=>(
+                <button key={v} className={`filter-chip ${filterPriority===v?'active':''}`} onClick={()=>setFilterPriority(v)}>{l}</button>
+              ))}
+            </div>
+            <div className="content">
+              {pendents.length===0&&completades.length===0&&(
+                <div className="empty-state">{Ic.list}<p>Cap tasca. Crea-ne una amb <span className="kbd">n</span></p></div>
+              )}
+              {DATE_GROUPS.map(grp=>{
+                const grpTasks = pendents.filter(t=>dateCategory(t)===grp.key);
+                if (!grpTasks.length) return null;
+                return (
+                  <div key={grp.key}>
+                    <div className="date-group-header">
+                      <span className="dgh-dot" style={{background:grp.dot}}/>
+                      {grp.label}
+                      <span className="dgh-count">{grpTasks.length}</span>
+                    </div>
+                    {grpTasks.map(t=><TaskItem key={t.id} task={t} lists={lists}
+                      selected={selectedTask?.id===t.id} onClick={()=>setSelectedTask(t)}
+                      onToggle={()=>toggleStatus(t.id,t.status)} onDelete={()=>deleteTask(t.id)}
+                      onDelay={(task,type)=>delayTask(task,type)} onTrack={toggleTrack}/>)}
+                  </div>
+                );
+              })}
+              {completades.length>0&&<>
+                <div className="date-group-header">
+                  <span className="dgh-dot" style={{background:'var(--success)'}}/>
+                  Completades
+                  <span className="dgh-count">{completades.length}</span>
+                </div>
+                {completades.map(t=><TaskItem key={t.id} task={t} lists={lists}
+                  selected={selectedTask?.id===t.id} onClick={()=>setSelectedTask(t)}
+                  onToggle={()=>toggleStatus(t.id,t.status)} onDelete={()=>deleteTask(t.id)}
+                  onDelay={(task,type)=>delayTask(task,type)} onTrack={toggleTrack}/>)}
+              </>}
+            </div>
+          </>) : (
+            <CalendarView tasks={filtered} lists={lists} selectedTask={selectedTask} onSelectTask={setSelectedTask}/>
+          )}
+        </div>
+
+        {selectedTask&&(
+          <DetailPanel task={selectedTask} lists={lists}
+            onUpdate={updateTask} onDelete={()=>deleteTask(selectedTask.id)}
+            onClose={()=>setSelectedTask(null)} onDelay={delayTask}/>
+        )}
+      </div>
+
+      {showModal&&<NewTaskModal lists={lists}
+        defaultList={selectedList!=='all'&&selectedList!=='today'&&selectedList!=='seguiment'?selectedList:lists[0]?.id}
+        onSave={addTask} onClose={()=>setShowModal(false)}/>}
+      {showListModal&&<NewListModal onSave={addList} onClose={()=>setShowListModal(false)}/>}
+      {editingList&&<ListSettingsModal list={editingList} onSave={(id,data)=>updateList(id,data)} onClose={()=>setEditingList(null)}/>}
+      {showDefaultFields&&<DefaultFieldsModal fields={defaultFields} onSave={saveDefaultFields} onClose={()=>setShowDefaultFields(false)}/>}
+      {toast&&<div className="toast"><span style={{color:'var(--success)',fontSize:15}}>✓</span>{toast.replace('✓ ','')}</div>}
+    </>
+  );
+}
+
+// ─── SIDEBAR ITEM ─────────────────────────────────────────────────────────────
+function SidebarItem({icon,dot,label,count,active,onClick,onSettings,onDelete}) {
+  const [hover,setHover] = useState(false);
+  return (
+    <div className={`sidebar-item ${active?'active':''}`} onClick={onClick}
+      onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)}>
+      {icon&&<span style={{width:14,height:14,flexShrink:0}}>{icon}</span>}
+      {dot&&<span className="sidebar-dot" style={{background:dot}}/>}
+      <span style={{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{label}</span>
+      {onSettings&&hover&&(
+        <span className="sidebar-gear" onClick={e=>{e.stopPropagation();onSettings();}} title="Configuració">
+          <svg style={{width:12,height:12}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        </span>
+      )}
+      {onDelete&&hover&&!onSettings&&(
+        <span onClick={e=>{e.stopPropagation();onDelete();}} style={{color:'var(--text3)',fontSize:14,lineHeight:1,cursor:'pointer'}}>×</span>
+      )}
+      {count>0&&<span className="badge">{count}</span>}
+    </div>
+  );
+}
+
+// ─── TASK ITEM ────────────────────────────────────────────────────────────────
+function TaskItem({task,lists,selected,onClick,onToggle,onDelete,onDelay,onTrack}) {
+  const [hover,setHover] = useState(false);
+  const done  = task.status==='completada';
+  const list  = lists.find(l=>l.id===task.listId);
+  const total = task.subtasks?.length??0;
+  const doneN = task.subtasks?.filter(s=>s.done).length??0;
+  const recLabel = RECURRENCE_OPTIONS.find(r=>r.value===task.recurrence&&task.recurrence!=='none')?.label;
+  return (
+    <div className={`task-item ${done?'done':''} ${selected?'selected':''}`} onClick={onClick}
+      onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)}>
+      <div className={`task-check ${done?'checked':''}`} onClick={e=>{e.stopPropagation();onToggle();}}>{Ic.check}</div>
+      <div className="task-body">
+        <div className="task-title">{task.title}</div>
+        <div className="task-meta">
+          <span className={`priority-dot p-${task.priority}`}/>
+          <span className={`status-badge s-${task.status}`}>{task.status==='en-curs'?'En curs':task.status==='completada'?'Completada':'Pendent'}</span>
+          {task.endDate&&(()=>{
+            const cat = dateCategory(task);
+            const cfg = DATE_GROUPS.find(g=>g.key===cat);
+            return (
+              <span className={`date-badge ${cfg?.cls||'date-later'}`}>
+                {Ic.calendar}
+                {isOverdue(task)?'⚠ ':''}
+                {fmt(task.endDate)}{task.endTime?' '+task.endTime:''}
+              </span>
+            );
+          })()}
+          {recLabel&&<span className="recurrence-chip">🔁 {recLabel}</span>}
+          {task.reminderMinutes>0&&<span className="task-meta-item" title="Recordatori actiu">{Ic.bell}</span>}
+          {list&&<span className="task-meta-item" style={{color:list.color}}>{Ic.folder} {list.name}</span>}
+          {(task.tags||[]).map(tag=>{const c=tagColor(tag);return <span key={tag} className="tag" style={{background:c.bg,color:c.text}}>{tag}</span>;})}
+          {total>0&&<span className="task-meta-item">{doneN}/{total}</span>}
+        </div>
+        {total>0&&<div className="progress-bar"><div className="progress-fill" style={{width:`${(doneN/total)*100}%`}}/></div>}
+      </div>
+      <div className="task-actions">
+        {(task.tracked||hover)&&(
+          <button className={`track-btn ${task.tracked?'on':''}`} title={task.tracked?'Deixar de seguir':'Seguir tasca'}
+            onClick={e=>{e.stopPropagation();onTrack(task);}}>
+            {task.tracked?Ic.bmark:Ic.bookmark}
+          </button>
+        )}
+        {hover&&!done&&<>
+          <button className="delay-btn" title="Endarrerir 1 hora" onClick={e=>{e.stopPropagation();onDelay(task,'1h');}}>+1h</button>
+          <button className="delay-btn" title="Endarrerir 1 dia"  onClick={e=>{e.stopPropagation();onDelay(task,'1d');}}>+1d</button>
+        </>}
+        <button className="btn btn-danger-soft btn-icon" style={{flexShrink:0}} onClick={e=>{e.stopPropagation();onDelete();}}>{Ic.trash}</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── DETAIL PANEL ─────────────────────────────────────────────────────────────
+function DetailPanel({task,lists,onUpdate,onDelete,onClose,onDelay}) {
+  const [local,setLocal] = useState(task);
+  const [tagInput,setTagInput] = useState('');
+  const timer = useRef(null);
+  useEffect(()=>setLocal(task),[task.id]);
+  const push = patch => {
+    const updated = {...local,...patch};
+    setLocal(updated);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(()=>onUpdate(updated),500);
+  };
+  const addTag = t => {t=t.trim().toLowerCase();if(t&&!(local.tags||[]).includes(t))push({tags:[...(local.tags||[]),t]});setTagInput('');};
+  const removeTag = t => push({tags:(local.tags||[]).filter(x=>x!==t)});
+  const addSubtask = () => push({subtasks:[...(local.subtasks||[]),{id:uid(),title:'',done:false}]});
+  const updSubtask = (id,p) => push({subtasks:(local.subtasks||[]).map(s=>s.id===id?{...s,...p}:s)});
+  const delSubtask = id => push({subtasks:(local.subtasks||[]).filter(s=>s.id!==id)});
+  const list = lists.find(l=>l.id===local.listId);
+  const customFields = list?.fields||[];
+  const customValues = local.customValues||{};
+  const setCustomValue = (fid,val) => push({customValues:{...customValues,[fid]:val}});
+  return (
+    <div className="detail-panel">
+      <div className="detail-header">
+        <h3>Detall</h3>
+        <div style={{display:'flex',gap:6}}>
+          <button className="btn btn-danger-soft btn-icon" onClick={onDelete}>{Ic.trash}</button>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}>{Ic.x}</button>
+        </div>
+      </div>
+      <div className="detail-body">
+        <div className="detail-field">
+          <input className="detail-title-input" value={local.title||''} placeholder="Títol"
+            onChange={e=>push({title:e.target.value})}/>
+        </div>
+        <div className="detail-field">
+          <label>Descripció</label>
+          <textarea className="detail-desc" value={local.description||''} placeholder="Descripció..."
+            onChange={e=>push({description:e.target.value})}/>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+          <div className="detail-field">
+            <label>Estat</label>
+            <select className="detail-select" value={local.status} onChange={e=>push({status:e.target.value})}>
+              <option value="pendent">Pendent</option>
+              <option value="en-curs">En curs</option>
+              <option value="completada">Completada</option>
+            </select>
+          </div>
+          <div className="detail-field">
+            <label>Prioritat</label>
+            <select className="detail-select" value={local.priority} onChange={e=>push({priority:e.target.value})}>
+              <option value="alta">Alta</option>
+              <option value="mitjana">Mitjana</option>
+              <option value="baixa">Baixa</option>
+            </select>
+          </div>
+        </div>
+        {/* Dates + times */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+          <div className="detail-field">
+            <label>Inici</label>
+            <input type="date" className="detail-date" value={local.startDate||''} onChange={e=>push({startDate:e.target.value})}/>
+          </div>
+          <div className="detail-field">
+            <label>Fi</label>
+            <input type="date" className="detail-date" value={local.endDate||''} onChange={e=>push({endDate:e.target.value})}/>
+          </div>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+          <div className="detail-field">
+            <label>Hora inici</label>
+            <input type="time" className="detail-date" value={local.startTime||''} onChange={e=>push({startTime:e.target.value})}/>
+          </div>
+          <div className="detail-field">
+            <label>Hora fi</label>
+            <input type="time" className="detail-date" value={local.endTime||''} onChange={e=>push({endTime:e.target.value})}/>
+          </div>
+        </div>
+        {/* Delay buttons */}
+        {local.status!=='completada'&&(
+          <div className="detail-field">
+            <label>Endarrerir</label>
+            <div style={{display:'flex',gap:8}}>
+              <button className="btn btn-ghost" style={{fontSize:12,padding:'5px 14px',fontWeight:700}}
+                onClick={()=>onDelay(local,'1h')}>+1 hora</button>
+              <button className="btn btn-ghost" style={{fontSize:12,padding:'5px 14px',fontWeight:700}}
+                onClick={()=>onDelay(local,'1d')}>+1 dia</button>
+            </div>
+          </div>
+        )}
+        {/* Reminder + Recurrence */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+          <div className="detail-field">
+            <label>{Ic.bell} Recordatori</label>
+            <select className="detail-select" value={local.reminderMinutes||0} onChange={e=>push({reminderMinutes:+e.target.value})}>
+              {REMINDER_OPTIONS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+          <div className="detail-field">
+            <label>{Ic.repeat} Repetició</label>
+            <select className="detail-select" value={local.recurrence||'none'} onChange={e=>push({recurrence:e.target.value})}>
+              {RECURRENCE_OPTIONS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+        </div>
+        {(local.recurrence&&local.recurrence!=='none')&&(
+          <div className="detail-field">
+            <label>Fi de la repetició</label>
+            <input type="date" className="detail-date" value={local.recurrenceEndDate||''}
+              onChange={e=>push({recurrenceEndDate:e.target.value})}
+              min={local.endDate||today}/>
+            {local.recurrenceEndDate&&(
+              <button style={{fontSize:11,color:'var(--text3)',background:'none',border:'none',cursor:'pointer',padding:'2px 0',fontFamily:'inherit'}}
+                onClick={()=>push({recurrenceEndDate:''})}>× Eliminar data de fi</button>
+            )}
+          </div>
+        )}
+        {(local.recurrence&&local.recurrence!=='none'&&local.status!=='completada')&&(
+          <div style={{padding:'8px 10px',background:'rgba(247,183,79,.08)',border:'1px solid rgba(247,183,79,.25)',borderRadius:8,fontSize:12,color:'var(--text2)'}}>
+            <div style={{marginBottom:6,fontSize:11,color:'var(--text3)'}}>
+              ℹ️ El checkbox completa l'ocurrència actual i programa la propera.
+            </div>
+            <button className="btn btn-ghost" style={{fontSize:12,padding:'4px 12px',width:'100%',justifyContent:'center'}}
+              onClick={()=>push({status:'completada',recurrence:'none'})}>
+              🏁 Finalitzar sèrie (marcar com a feta definitivament)
+            </button>
+          </div>
+        )}
+        <div className="detail-field">
+          <label>Llista</label>
+          <select className="detail-select" value={local.listId||''} onChange={e=>push({listId:e.target.value})}>
+            <option value="">— Sense llista —</option>
+            {lists.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+        </div>
+        <div className="detail-field">
+          <label>Etiquetes</label>
+          <div className="tag-input-wrap">
+            {(local.tags||[]).map(tag=>{const c=tagColor(tag);return(
+              <span key={tag} className="tag-pill" style={{background:c.bg,color:c.text}}>
+                {tag}<button onClick={()=>removeTag(tag)}>×</button>
+              </span>);})}
+            <input className="tag-input" placeholder="etiqueta + Enter" value={tagInput}
+              onChange={e=>setTagInput(e.target.value)}
+              onKeyDown={e=>{
+                if(e.key==='Enter'||e.key===','){e.preventDefault();addTag(tagInput);}
+                if(e.key==='Backspace'&&!tagInput&&(local.tags||[]).length)removeTag((local.tags||[]).at(-1));
+              }}/>
+          </div>
+        </div>
+        <div className="detail-field">
+          <label>Subtasques ({(local.subtasks||[]).filter(s=>s.done).length}/{(local.subtasks||[]).length})</label>
+          <div className="subtask-editor">
+            {(local.subtasks||[]).map(s=>(
+              <div key={s.id} className="subtask-row">
+                <div className={`subtask-check ${s.done?'checked':''}`} onClick={()=>updSubtask(s.id,{done:!s.done})}/>
+                <input value={s.title} placeholder="Subtasca..." onChange={e=>updSubtask(s.id,{title:e.target.value})}
+                  style={s.done?{textDecoration:'line-through',opacity:.5}:{}}/>
+                <span className="del" onClick={()=>delSubtask(s.id)}>×</span>
+              </div>
+            ))}
+            <button className="add-subtask-btn" onClick={addSubtask}>{Ic.plus} Afegir subtasca</button>
+          </div>
+        </div>
+        {customFields.length>0&&(
+          <div className="custom-fields-section">
+            <div className="custom-fields-title"><span>Camps de la llista</span></div>
+            {customFields.map(f=>(
+              <div key={f.id} className="detail-field" style={{marginBottom:10}}>
+                <label>{f.name}</label>
+                <CustomFieldInput field={f} value={customValues[f.id]} onChange={v=>setCustomValue(f.id,v)}/>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── CUSTOM FIELD INPUT ────────────────────────────────────────────────────────
+function CustomFieldInput({field,value,onChange}) {
+  switch(field.type) {
+    case 'text':    return <input className="detail-input" value={value||''} onChange={e=>onChange(e.target.value)} placeholder={field.name}/>;
+    case 'number':  return <input type="number" className="detail-input" value={value??''} onChange={e=>onChange(e.target.value)} placeholder="0"/>;
+    case 'date':    return <input type="date" className="detail-date" value={value||''} onChange={e=>onChange(e.target.value)}/>;
+    case 'url':     return <input type="url" className="detail-input" value={value||''} onChange={e=>onChange(e.target.value)} placeholder="https://..."/>;
+    case 'checkbox':return (
+      <div style={{display:'flex',alignItems:'center',gap:8}}>
+        <input type="checkbox" className="detail-checkbox" checked={!!value} onChange={e=>onChange(e.target.checked)}/>
+        <span style={{fontSize:13,color:'var(--text2)'}}>{value?'Sí':'No'}</span>
+      </div>
+    );
+    case 'select':  return (
+      <select className="detail-select" value={value||''} onChange={e=>onChange(e.target.value)}>
+        <option value="">— Selecciona —</option>
+        {(field.options||[]).map(o=><option key={o} value={o}>{o}</option>)}
+      </select>
+    );
+    default: return null;
+  }
+}
+
+// ─── FIELDS MANAGER ────────────────────────────────────────────────────────────
+function FieldsManager({fields,onChange}) {
+  const [showAdd,setShowAdd] = useState(false);
+  const [newField,setNewField] = useState({name:'',type:'text',options:[]});
+  const [newOption,setNewOption] = useState('');
+  const addField = () => {
+    if (!newField.name.trim()) return;
+    onChange([...fields,{...newField,id:uid(),name:newField.name.trim()}]);
+    setNewField({name:'',type:'text',options:[]}); setNewOption(''); setShowAdd(false);
+  };
+  const removeField = id => onChange(fields.filter(f=>f.id!==id));
+  const addOption = () => {
+    if (!newOption.trim()) return;
+    setNewField(f=>({...f,options:[...f.options,newOption.trim()]})); setNewOption('');
+  };
+  const typeLabel = t => FIELD_TYPES.find(x=>x.value===t)?.label||t;
+  return (
+    <div>
+      {fields.length===0&&!showAdd&&<p style={{fontSize:12,color:'var(--text3)',marginBottom:10}}>Cap camp personalitzat.</p>}
+      {fields.map(f=>(
+        <div key={f.id} className="field-row">
+          <span style={{width:12,height:12,color:'var(--text3)',flexShrink:0}}>{Ic.drag}</span>
+          <span className="field-row-name">{f.name}</span>
+          <span className="field-type-badge">{typeLabel(f.type)}</span>
+          {f.type==='select'&&<span style={{fontSize:10,color:'var(--text3)'}}>{(f.options||[]).length} opc</span>}
+          <div className="field-actions">
+            <button className="field-action-btn danger" onClick={()=>removeField(f.id)}>{Ic.trash}</button>
+          </div>
+        </div>
+      ))}
+      {showAdd ? (
+        <div className="add-field-form">
+          <div className="input-row">
+            <input className="input" placeholder="Nom del camp" value={newField.name}
+              onChange={e=>setNewField(f=>({...f,name:e.target.value}))}
+              onKeyDown={e=>e.key==='Enter'&&newField.type!=='select'&&addField()} autoFocus/>
+            <select className="input" style={{maxWidth:140}} value={newField.type}
+              onChange={e=>setNewField(f=>({...f,type:e.target.value,options:[]}))}>
+              {FIELD_TYPES.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </div>
+          {newField.type==='select'&&(
+            <div>
+              <div style={{fontSize:11,color:'var(--text3)',marginBottom:6}}>Opcions:</div>
+              {newField.options.map(o=>(
+                <div key={o} className="option-row" style={{marginBottom:4}}>
+                  <span style={{flex:1,fontSize:13}}>{o}</span>
+                  <button className="option-del" onClick={()=>setNewField(f=>({...f,options:f.options.filter(x=>x!==o)}))}>×</button>
+                </div>
+              ))}
+              <div className="option-row">
+                <input className="input" placeholder="Nova opció..." value={newOption}
+                  onChange={e=>setNewOption(e.target.value)}
+                  onKeyDown={e=>e.key==='Enter'&&addOption()} style={{flex:1}}/>
+                <button className="btn btn-ghost" style={{padding:'6px 10px',fontSize:12}} onClick={addOption}>+</button>
+              </div>
+            </div>
+          )}
+          <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+            <button className="btn btn-ghost" style={{fontSize:12,padding:'6px 12px'}} onClick={()=>setShowAdd(false)}>Cancel·lar</button>
+            <button className="btn btn-primary" style={{fontSize:12,padding:'6px 12px'}} onClick={addField}>Afegir</button>
+          </div>
+        </div>
+      ) : (
+        <button className="btn btn-ghost" style={{fontSize:12,padding:'6px 12px',marginTop:4}} onClick={()=>setShowAdd(true)}>
+          {Ic.plus} Nou camp
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─── DEFAULT FIELDS MODAL ─────────────────────────────────────────────────────
+function DefaultFieldsModal({fields,onSave,onClose}) {
+  const [local,setLocal] = useState(fields);
+  return (
+    <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className="modal">
+        <h2>Camps per defecte</h2>
+        <p style={{fontSize:12,color:'var(--text2)',marginTop:-6}}>Totes les llistes noves heretaran aquests camps.</p>
+        <div className="divider"/>
+        <FieldsManager fields={local} onChange={setLocal}/>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel·lar</button>
+          <button className="btn btn-primary" onClick={()=>onSave(local)}>Guardar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── LIST SETTINGS MODAL ──────────────────────────────────────────────────────
+function ListSettingsModal({list,onSave,onClose}) {
+  const [tab,setTab]     = useState('general');
+  const [name,setName]   = useState(list.name);
+  const [color,setColor] = useState(list.color);
+  const [fields,setFields] = useState(list.fields||[]);
+  const save = () => onSave(list.id,{name,color,fields});
+  return (
+    <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className="modal">
+        <h2>Configuració: {list.name}</h2>
+        <div className="modal-tabs">
+          <button className={`modal-tab ${tab==='general'?'active':''}`} onClick={()=>setTab('general')}>General</button>
+          <button className={`modal-tab ${tab==='fields'?'active':''}`} onClick={()=>setTab('fields')}>Camps personalitzats</button>
+        </div>
+        {tab==='general'&&(<>
+          <div className="detail-field" style={{marginTop:8}}>
+            <label>Nom</label>
+            <input className="input" value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&save()}/>
+          </div>
+          <div>
+            <label style={{fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:'.06em',color:'var(--text3)',display:'block',marginBottom:8}}>Color</label>
+            <div className="color-opts">
+              {LIST_COLORS.map(c=><div key={c} className={`color-opt ${color===c?'selected':''}`} style={{background:c}} onClick={()=>setColor(c)}/>)}
+            </div>
+          </div>
+        </>)}
+        {tab==='fields'&&(
+          <div style={{marginTop:8}}>
+            <p style={{fontSize:12,color:'var(--text2)',marginBottom:12}}>Camps específics d'aquesta llista.</p>
+            <FieldsManager fields={fields} onChange={setFields}/>
+          </div>
+        )}
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel·lar</button>
+          <button className="btn btn-primary" onClick={save}>Guardar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── NEW LIST MODAL ───────────────────────────────────────────────────────────
+function NewListModal({onSave,onClose}) {
+  const [name,setName]   = useState('');
+  const [color,setColor] = useState(LIST_COLORS[0]);
+  const ref = useRef(null);
+  useEffect(()=>ref.current?.focus(),[]);
+  return (
+    <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className="modal modal-sm">
+        <h2>Nova llista</h2>
+        <input ref={ref} className="input" placeholder="Nom" value={name}
+          onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&name.trim()&&onSave({name,color})}/>
+        <div>
+          <label style={{fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:'.06em',color:'var(--text3)',display:'block',marginBottom:8}}>Color</label>
+          <div className="color-opts">
+            {LIST_COLORS.map(c=><div key={c} className={`color-opt ${color===c?'selected':''}`} style={{background:c}} onClick={()=>setColor(c)}/>)}
+          </div>
+        </div>
+        <p style={{fontSize:11,color:'var(--text3)'}}>Heretarà els camps per defecte.</p>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel·lar</button>
+          <button className="btn btn-primary" onClick={()=>name.trim()&&onSave({name,color})}>Crear</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── NEW TASK MODAL ───────────────────────────────────────────────────────────
+function NewTaskModal({lists,defaultList,onSave,onClose}) {
+  const [form,setForm] = useState({
+    title:'',description:'',startDate:today,endDate:'',startTime:'',endTime:'',
+    priority:'mitjana',status:'pendent',tags:[],
+    listId:defaultList||lists[0]?.id||'',subtasks:[],customValues:{},
+    reminderMinutes:0,recurrence:'none',recurrenceEndDate:''
+  });
+  const [tagInput,setTagInput] = useState('');
+  const ref = useRef(null);
+  useEffect(()=>ref.current?.focus(),[]);
+  const set = (k,v) => setForm(f=>({...f,[k]:v}));
+  const addTag = t => {t=t.trim().toLowerCase();if(t&&!form.tags.includes(t))set('tags',[...form.tags,t]);setTagInput('');};
+  const submit = () => {if(!form.title.trim())return;onSave(form);};
+  return (
+    <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className="modal">
+        <h2>Nova tasca</h2>
+        <input ref={ref} className="input" placeholder="Títol *" value={form.title}
+          onChange={e=>set('title',e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()}/>
+        <textarea className="input" placeholder="Descripció (opcional)" value={form.description}
+          onChange={e=>set('description',e.target.value)} style={{resize:'vertical',minHeight:52}}/>
+        <div className="input-row">
+          <select className="input" value={form.priority} onChange={e=>set('priority',e.target.value)}>
+            <option value="alta">Alta</option><option value="mitjana">Mitjana</option><option value="baixa">Baixa</option>
+          </select>
+          <select className="input" value={form.status} onChange={e=>set('status',e.target.value)}>
+            <option value="pendent">Pendent</option><option value="en-curs">En curs</option>
+          </select>
+          <select className="input" value={form.listId} onChange={e=>set('listId',e.target.value)}>
+            <option value="">— Llista —</option>
+            {lists.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+        </div>
+        <div className="input-row">
+          <div style={{flex:1}}>
+            <label style={{fontSize:10,color:'var(--text3)',display:'block',marginBottom:3}}>Inici</label>
+            <input type="date" className="input" value={form.startDate} onChange={e=>set('startDate',e.target.value)}/>
+          </div>
+          <div style={{flex:1}}>
+            <label style={{fontSize:10,color:'var(--text3)',display:'block',marginBottom:3}}>Hora inici</label>
+            <input type="time" className="input" value={form.startTime} onChange={e=>set('startTime',e.target.value)}/>
+          </div>
+        </div>
+        <div className="input-row">
+          <div style={{flex:1}}>
+            <label style={{fontSize:10,color:'var(--text3)',display:'block',marginBottom:3}}>Fi</label>
+            <input type="date" className="input" value={form.endDate} onChange={e=>set('endDate',e.target.value)}/>
+          </div>
+          <div style={{flex:1}}>
+            <label style={{fontSize:10,color:'var(--text3)',display:'block',marginBottom:3}}>Hora fi</label>
+            <input type="time" className="input" value={form.endTime} onChange={e=>set('endTime',e.target.value)}/>
+          </div>
+        </div>
+        <div className="input-row">
+          <div style={{flex:1}}>
+            <label style={{fontSize:10,color:'var(--text3)',display:'block',marginBottom:3}}>Recordatori</label>
+            <select className="input" value={form.reminderMinutes} onChange={e=>set('reminderMinutes',+e.target.value)}>
+              {REMINDER_OPTIONS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+          <div style={{flex:1}}>
+            <label style={{fontSize:10,color:'var(--text3)',display:'block',marginBottom:3}}>Repetició</label>
+            <select className="input" value={form.recurrence} onChange={e=>set('recurrence',e.target.value)}>
+              {RECURRENCE_OPTIONS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+        </div>
+        {form.recurrence!=='none'&&(
+          <div>
+            <label style={{fontSize:10,color:'var(--text3)',display:'block',marginBottom:3}}>Fi de la repetició (opcional)</label>
+            <input type="date" className="input" value={form.recurrenceEndDate}
+              onChange={e=>set('recurrenceEndDate',e.target.value)}
+              min={form.endDate||today}/>
+          </div>
+        )}
+        <div>
+          <label style={{fontSize:10,color:'var(--text3)',display:'block',marginBottom:5}}>Etiquetes</label>
+          <div className="tag-input-wrap">
+            {form.tags.map(tag=>{const c=tagColor(tag);return(
+              <span key={tag} className="tag-pill" style={{background:c.bg,color:c.text}}>
+                {tag}<button onClick={()=>set('tags',form.tags.filter(t=>t!==tag))}>×</button>
+              </span>);})}
+            <input className="tag-input" placeholder="etiqueta + Enter" value={tagInput}
+              onChange={e=>setTagInput(e.target.value)}
+              onKeyDown={e=>{if(e.key==='Enter'||e.key===','){e.preventDefault();addTag(tagInput);}}}/>
+          </div>
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel·lar</button>
+          <button className="btn btn-primary" onClick={submit}>Crear tasca</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── CALENDAR VIEW ────────────────────────────────────────────────────────────
+function CalendarView({tasks,lists,selectedTask,onSelectTask}) {
+  const now = new Date();
+  const [year,setYear]   = useState(now.getFullYear());
+  const [month,setMonth] = useState(now.getMonth());
+  const [popup,setPopup] = useState(null);
+  const popupRef = useRef(null);
+  useEffect(()=>{
+    const h = e => {if(popupRef.current&&!popupRef.current.contains(e.target))setPopup(null);};
+    document.addEventListener('mousedown',h);
+    return ()=>document.removeEventListener('mousedown',h);
+  },[]);
+  const prevMonth = ()=>{if(month===0){setYear(y=>y-1);setMonth(11);}else setMonth(m=>m-1);};
+  const nextMonth = ()=>{if(month===11){setYear(y=>y+1);setMonth(0);}else setMonth(m=>m+1);};
+  const firstDay = new Date(year,month,1);
+  const lastDay  = new Date(year,month+1,0);
+  const startOffset = (firstDay.getDay()+6)%7;
+  const totalCells  = Math.ceil((startOffset+lastDay.getDate())/7)*7;
+  const cells = Array.from({length:totalCells},(_,i)=>{
+    const d = new Date(year,month,1-startOffset+i);
+    return {date:d,dateStr:d.toISOString().split('T')[0],inMonth:d.getMonth()===month};
+  });
+  const tasksForDay = dateStr => tasks.filter(t=>{
+    const start=t.startDate||t.endDate; const end=t.endDate||t.startDate;
+    if(!start)return false; return start<=dateStr&&dateStr<=end;
+  });
+  const monthName = firstDay.toLocaleDateString('ca-ES',{month:'long',year:'numeric'});
+  const DAYS = ['Dl','Dt','Dc','Dj','Dv','Ds','Dg'];
+  return (
+    <div className="cal-wrap">
+      <div className="cal-nav">
+        <div style={{display:'flex',gap:6,alignItems:'center'}}>
+          <button className="cal-nav-btn" onClick={prevMonth}>{Ic.chevL}</button>
+          <button className="cal-nav-btn" onClick={nextMonth}>{Ic.chevR}</button>
+          <h2 style={{marginLeft:8}}>{monthName}</h2>
+        </div>
+        <button className="btn btn-ghost" style={{fontSize:12,padding:'5px 12px'}}
+          onClick={()=>{setYear(now.getFullYear());setMonth(now.getMonth());}}>Avui</button>
+      </div>
+      <div className="cal-grid">
+        {DAYS.map(d=><div key={d} className="cal-dow">{d}</div>)}
+        {cells.map(({date,dateStr,inMonth})=>{
+          const dayTasks = tasksForDay(dateStr);
+          const isToday  = dateStr===today;
+          const MAX=3; const visible=dayTasks.slice(0,MAX); const extra=dayTasks.length-MAX;
+          const isPopup  = popup?.dateStr===dateStr;
+          return (
+            <div key={dateStr} className={`cal-day ${isToday?'today':''} ${!inMonth?'other-month':''}`}
+              onClick={()=>dayTasks.length>0&&setPopup(isPopup?null:{dateStr})}>
+              <div className="cal-day-num">{date.getDate()}</div>
+              {visible.map(t=>{
+                const list=lists.find(l=>l.id===t.listId);
+                const color=list?.color||'var(--accent)';
+                return <div key={t.id} className="cal-task-chip"
+                  style={{background:color+'22',color}}
+                  onClick={e=>{e.stopPropagation();onSelectTask(t);setPopup(null);}}
+                  title={t.title}>{t.status==='completada'?'✓ ':''}{t.title}</div>;
+              })}
+              {extra>0&&<div className="cal-more">+{extra} més</div>}
+              {isPopup&&dayTasks.length>MAX&&(
+                <div ref={popupRef} className="cal-day-tasks-popup" onClick={e=>e.stopPropagation()}>
+                  <h4>{date.toLocaleDateString('ca-ES',{day:'numeric',month:'long'})}</h4>
+                  {dayTasks.map(t=>{
+                    const list=lists.find(l=>l.id===t.listId);
+                    return <div key={t.id} className="cal-popup-task" onClick={()=>{onSelectTask(t);setPopup(null);}}>
+                      <span className={`priority-dot p-${t.priority}`}/>
+                      <span style={{flex:1}}>{t.title}</span>
+                      {list&&<span style={{fontSize:10,color:list.color}}>{list.name}</span>}
+                    </div>;
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{display:'flex',gap:12,flexWrap:'wrap',marginTop:14,fontSize:11,color:'var(--text3)'}}>
+        {lists.map(l=><span key={l.id} style={{display:'flex',alignItems:'center',gap:4}}>
+          <span style={{width:8,height:8,borderRadius:'50%',background:l.color,display:'inline-block'}}/>{l.name}
+        </span>)}
+      </div>
+    </div>
+  );
+}
+
+// ─── SEGUIMENT VIEW ───────────────────────────────────────────────────────────
+function SeguimentView({tasks, completionLogs, lists}) {
+  const [period, setPeriod] = useState('1m');
+  const periodDays = period==='1m'?30:period==='3m'?90:365;
+
+  const endDt   = new Date();
+  const startDt = new Date(); startDt.setDate(startDt.getDate()-periodDays+1);
+  const days = [];
+  const d = new Date(startDt);
+  while (d <= endDt) { days.push(d.toISOString().split('T')[0]); d.setDate(d.getDate()+1); }
+
+  const trackedTasks = tasks.filter(t=>t.tracked);
+
+  // Build map: taskId → { date → count }
+  const logMap = {};
+  completionLogs.forEach(l=>{
+    if (!logMap[l.taskId]) logMap[l.taskId] = {};
+    logMap[l.taskId][l.date] = (logMap[l.taskId][l.date]||0)+1;
+  });
+
+  const logsInPeriod = completionLogs.filter(l=>l.date>=days[0]&&l.date<=days[days.length-1]);
+  const totalCompletions = logsInPeriod.length;
+  const uniqueDays = new Set(logsInPeriod.map(l=>l.date)).size;
+
+  if (trackedTasks.length===0) return (
+    <div className="seg-wrap">
+      <div style={{marginBottom:16,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <span style={{fontSize:16,fontWeight:600}}>Seguiment de tasques</span>
+      </div>
+      <div className="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        <p>Cap tasca en seguiment.<br/>Fes clic al 🔖 d'una tasca per afegir-la al seguiment.</p>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="seg-wrap">
+      <div style={{marginBottom:16,display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:10}}>
+        <span style={{fontSize:16,fontWeight:600}}>Seguiment de tasques</span>
+        <div className="seg-period">
+          {[['1m','1 mes'],['3m','3 mesos'],['1y','1 any']].map(([v,l])=>(
+            <button key={v} className={`filter-chip ${period===v?'active':''}`} onClick={()=>setPeriod(v)}>{l}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="stats-cards">
+        <div className="stats-card">
+          <div className="stats-card-num" style={{color:'var(--accent)'}}>{totalCompletions}</div>
+          <div className="stats-card-label">Completions al període</div>
+        </div>
+        <div className="stats-card">
+          <div className="stats-card-num" style={{color:'var(--success)'}}>{uniqueDays}</div>
+          <div className="stats-card-label">Dies amb activitat</div>
+        </div>
+        <div className="stats-card">
+          <div className="stats-card-num" style={{color:'var(--warn)'}}>{trackedTasks.length}</div>
+          <div className="stats-card-label">Tasques seguides</div>
+        </div>
+      </div>
+
+      {trackedTasks.map(task=>{
+        const list = lists.find(l=>l.id===task.listId);
+        const color = list?.color||'var(--accent)';
+        const taskLogs = logMap[task.id]||{};
+        const completionsInPeriod = days.filter(d=>taskLogs[d]>0).length;
+        const recLabel = RECURRENCE_OPTIONS.find(r=>r.value===task.recurrence&&task.recurrence!=='none')?.label;
+        return (
+          <div key={task.id} className="tracked-card">
+            <div className="tracked-task-header">
+              <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+                <span className={`priority-dot p-${task.priority}`}/>
+                <span style={{fontSize:14,fontWeight:500}}>{task.title}</span>
+                {list&&<span style={{fontSize:11,color:list.color}}>{list.name}</span>}
+                {recLabel&&<span className="recurrence-chip">🔁 {recLabel}</span>}
+              </div>
+              <span style={{fontSize:12,fontWeight:600,color:'var(--text2)',flexShrink:0}}>
+                {completionsInPeriod} dia{completionsInPeriod!==1?'es':''}
+              </span>
+            </div>
+            <Heatmap days={days} logs={taskLogs} color={color} period={period}/>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Heatmap({days, logs, color, period}) {
+  if (period==='1m') {
+    return (
+      <div>
+        <div style={{display:'flex',gap:2,flexWrap:'wrap',marginBottom:4}}>
+          {days.map(d=>{
+            const count = logs[d]||0;
+            return (
+              <div key={d} className="heatmap-sq" title={`${d}: ${count} completions`}
+                style={{width:16,height:16,background:count>0?color:'var(--border)',opacity:count>0?1:0.3}}/>
+            );
+          })}
+        </div>
+        <div style={{display:'flex',justifyContent:'space-between',fontSize:9,color:'var(--text3)',marginTop:2}}>
+          <span>{fmt(days[0])}</span><span>{fmt(days[days.length-1])}</span>
+        </div>
+      </div>
+    );
+  }
+  // Group into weeks (Mon-start)
+  const weeks = [];
+  let week = [];
+  const startDow = (new Date(days[0]+'T12:00').getDay()+6)%7; // 0=Mon
+  for (let i=0;i<startDow;i++) week.push(null); // pad
+  days.forEach(d=>{
+    week.push(d);
+    if (week.length===7) { weeks.push(week); week=[]; }
+  });
+  if (week.length>0) weeks.push(week);
+
+  const sq = period==='1y'?10:13;
+  return (
+    <div style={{overflowX:'auto'}}>
+      <div style={{display:'flex',gap:2,minWidth:'max-content'}}>
+        {weeks.map((w,wi)=>(
+          <div key={wi} style={{display:'flex',flexDirection:'column',gap:2}}>
+            {w.map((d,di)=>{
+              if (!d) return <div key={di} style={{width:sq,height:sq}}/>;
+              const count = logs[d]||0;
+              return (
+                <div key={d} className="heatmap-sq" title={`${d}: ${count} completions`}
+                  style={{width:sq,height:sq,background:count>0?color:'var(--border)',
+                  opacity:count>0?Math.min(0.35+count*0.35,1):0.25}}/>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+      <div style={{display:'flex',justifyContent:'space-between',fontSize:9,color:'var(--text3)',marginTop:3}}>
+        <span>{fmt(days[0])}</span><span>{fmt(days[days.length-1])}</span>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
