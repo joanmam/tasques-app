@@ -637,7 +637,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v1.5</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v1.6</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -1462,10 +1462,18 @@ function SeguimentView({tasks, completionLogs, lists}) {
     }
   });
 
+  // Unió de potencials futurs + completions passades (també eren potencials)
+  const mergedMap = {};
+  trackedTasks.forEach(t => {
+    const merged = new Set(occMap[t.id]);
+    (compMap[t.id]||new Set()).forEach(d => merged.add(d));
+    mergedMap[t.id] = merged;
+  });
+
   const allOccDays = new Set();
   let totalOcc = 0, totalComp = 0;
   trackedTasks.forEach(t => {
-    occMap[t.id].forEach(d => { allOccDays.add(d); totalOcc++; });
+    mergedMap[t.id].forEach(d => { allOccDays.add(d); totalOcc++; });
     totalComp += (compMap[t.id]?.size||0);
   });
 
@@ -1510,7 +1518,7 @@ function SeguimentView({tasks, completionLogs, lists}) {
       {trackedTasks.map(task=>{
         const list = lists.find(l=>l.id===task.listId);
         const color = list?.color||'var(--accent)';
-        const occs = occMap[task.id];
+        const occs = mergedMap[task.id];
         const comps = compMap[task.id]||new Set();
         const occCount = occs.size;
         const compCount = comps.size;
