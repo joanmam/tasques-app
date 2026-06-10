@@ -251,6 +251,8 @@
     @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
     .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 18px;font-size:13px;font-weight:500;box-shadow:0 8px 30px rgba(0,0,0,.2);z-index:200;display:flex;align-items:center;gap:8px;color:var(--text);animation:toastIn .2s ease;white-space:nowrap}
     @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+    @keyframes voicePulse{0%,100%{transform:scale(1)}50%{transform:scale(1.3)}}
+    .voice-active{animation:voicePulse .6s infinite;color:var(--danger)!important}
   </style>
 </head>
 <body>
@@ -432,6 +434,8 @@ function App() {
   const [filterPriority,setFilterPriority] = useState('all');
   const [filterTag,setFilterTag]         = useState('all');
   const [showModal,setShowModal]         = useState(false);
+  const [voiceListening,setVoiceListening] = useState(false);
+  const [voicePreFill,setVoicePreFill]   = useState(null);
   const [showListModal,setShowListModal] = useState(false);
   const [editingList,setEditingList]     = useState(null);
   const [showDefaultFields,setShowDefaultFields] = useState(false);
@@ -523,6 +527,83 @@ function App() {
 
   if (user===undefined) return <div className="loading-screen"><div className="spinner"/><span style={{fontSize:13,color:'var(--text3)'}}>Carregant...</span></div>;
   if (!user) return <LoginScreen/>;
+
+  // ── Parser de veu en català ──────────────────────────────────────────────
+  const parseVoiceInput = (text) => {
+    let title = text;
+    const lower = text.toLowerCase();
+    let endDate = '', endTime = '';
+    const now = new Date();
+    const addDays = n => { const d=new Date(now); d.setDate(d.getDate()+n); return d.toISOString().split('T')[0]; };
+    const dayNames = ['diumenge','dilluns','dimarts','dimecres','dijous','divendres','dissabte'];
+    const dayNamesEs = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+    const monthNames = ['gener','febrer','març','abril','maig','juny','juliol','agost','setembre','octubre','novembre','desembre'];
+    const monthNamesEs = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    // Hora (català + castellà)
+    const timeRules = [
+      [/a les (\d{1,2})[h:](\d{2})/, m=>`${m[1].padStart(2,'0')}:${m[2]}`],
+      [/a las (\d{1,2})[h:](\d{2})/, m=>`${m[1].padStart(2,'0')}:${m[2]}`],
+      [/a les (\d{1,2})h/,           m=>`${m[1].padStart(2,'0')}:00`],
+      [/a las (\d{1,2})h/,           m=>`${m[1].padStart(2,'0')}:00`],
+      [/a les (\d{1,2})/,            m=>`${m[1].padStart(2,'0')}:00`],
+      [/a las (\d{1,2})/,            m=>`${m[1].padStart(2,'0')}:00`],
+      [/al mat[íi]|por la mañana/,   ()=>'09:00'],
+      [/a migdia|a mediodía/,        ()=>'12:00'],
+      [/a la tarda|por la tarde/,    ()=>'15:00'],
+      [/al vespre|al atardecer/,     ()=>'19:00'],
+      [/a la nit|por la noche/,      ()=>'21:00'],
+    ];
+    for (const [re,fn] of timeRules) {
+      const m = lower.match(re);
+      if (m) { endTime=fn(m); title=title.replace(new RegExp(re.source,'i'),''); break; }
+    }
+    // Data (català + castellà)
+    const allDays = [...dayNames,...dayNamesEs];
+    const dateRules = [
+      [/\bavui\b|\bhoy\b/,                ()=>addDays(0)],
+      [/\bdem[àa] passat\b|\bpasado mañana\b/, ()=>addDays(2)],
+      [/\bdem[àa]\b|\bmañana\b/,          ()=>addDays(1)],
+      [/la setmana que ve|la semana que viene|la próxima semana/, ()=>addDays(7)],
+      [new RegExp(`(?:el proper |el |el próximo )?(${allDays.join('|')})`), m=>{
+        const raw=m[1]; const di=dayNames.indexOf(raw)!==-1?dayNames.indexOf(raw):dayNamesEs.indexOf(raw);
+        const diff=(di-now.getDay()+7)%7||7; return addDays(diff);
+      }],
+      [/el (\d{1,2}) de (\w+)/, m=>{
+        const mi=monthNames.indexOf(m[2])!==-1?monthNames.indexOf(m[2]):monthNamesEs.indexOf(m[2]);
+        if(mi===-1) return null;
+        const d=new Date(now.getFullYear(),mi,parseInt(m[1]));
+        if(d<now) d.setFullYear(d.getFullYear()+1);
+        return d.toISOString().split('T')[0];
+      }],
+    ];
+    for (const [re,fn] of dateRules) {
+      const m = lower.match(re);
+      if (m) { const r=fn(m); if(r){endDate=r; title=title.replace(new RegExp(re.source,'i'),'');} break; }
+    }
+    title = title.replace(/\s+/g,' ').replace(/^[\s,]+|[\s,]+$/g,'').trim();
+    title = title.charAt(0).toUpperCase()+title.slice(1);
+    return {title, endDate, endTime};
+  };
+
+  const startVoice = () => {
+    const SR = window.SpeechRecognition||window.webkitSpeechRecognition;
+    if (!SR) { showToast('⚠ El navegador no suporta reconeixement de veu'); return; }
+    const rec = new SR();
+    rec.lang = 'ca-ES';
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    setVoiceListening(true);
+    rec.onresult = e => {
+      setVoiceListening(false);
+      const transcript = e.results[0][0].transcript;
+      const parsed = parseVoiceInput(transcript);
+      setVoicePreFill(parsed);
+      setShowModal(true);
+    };
+    rec.onerror = () => { setVoiceListening(false); showToast('⚠ Error de reconeixement'); };
+    rec.onend   = () => setVoiceListening(false);
+    rec.start();
+  };
 
   const addTask = async data => {
     setSyncing(true);
@@ -669,7 +750,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.1</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.2</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -737,7 +818,12 @@ function App() {
                   <span style={{width:13,height:13}}>{Ic.calendar}</span> Calendari
                 </button>
               </div>
-              <button className="btn btn-primary" onClick={()=>setShowModal(true)}>{Ic.plus} Nova tasca</button>
+              <button className={`btn btn-ghost btn-icon ${voiceListening?'voice-active':''}`}
+                onClick={startVoice} title="Nova tasca per veu"
+                style={{color:voiceListening?'var(--danger)':'var(--text2)',fontSize:18,padding:'6px 10px'}}>
+                🎤
+              </button>
+              <button className="btn btn-primary" onClick={()=>{setVoicePreFill(null);setShowModal(true);}}>{Ic.plus} Nova tasca</button>
             </>}
           </div>
 
@@ -802,7 +888,8 @@ function App() {
 
       {showModal&&<NewTaskModal lists={lists}
         defaultList={selectedList!=='all'&&selectedList!=='today'&&selectedList!=='seguiment'?selectedList:lists[0]?.id}
-        onSave={addTask} onClose={()=>setShowModal(false)}/>}
+        preFill={voicePreFill}
+        onSave={addTask} onClose={()=>{setShowModal(false);setVoicePreFill(null);}}/>}
       {showListModal&&<NewListModal onSave={addList} onClose={()=>setShowListModal(false)}/>}
       {editingList&&<ListSettingsModal list={editingList} onSave={(id,data)=>updateList(id,data)} onClose={()=>setEditingList(null)}/>}
       {showDefaultFields&&<DefaultFieldsModal fields={defaultFields} onSave={saveDefaultFields} onClose={()=>setShowDefaultFields(false)}/>}
@@ -1252,9 +1339,10 @@ function NewListModal({onSave,onClose}) {
 }
 
 // ─── NEW TASK MODAL ───────────────────────────────────────────────────────────
-function NewTaskModal({lists,defaultList,onSave,onClose}) {
+function NewTaskModal({lists,defaultList,onSave,onClose,preFill}) {
   const [form,setForm] = useState({
-    title:'',description:'',startDate:today,endDate:'',startTime:'',endTime:'',
+    title:preFill?.title||'',description:'',startDate:today,
+    endDate:preFill?.endDate||'',startTime:'',endTime:preFill?.endTime||'',
     priority:'mitjana',status:'pendent',tags:[],
     listId:defaultList||lists[0]?.id||'',subtasks:[],customValues:{},
     reminderMinutes:0,recurrence:'none',recurrenceEndDate:''
