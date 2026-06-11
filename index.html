@@ -565,13 +565,13 @@ function App() {
     const dateRules = [
       [/\bavui\b|\bhoy\b/,                ()=>addDays(0)],
       [/\bdem[àa] passat\b|\bpasado mañana\b/, ()=>addDays(2)],
-      [/\bdem[àa]\b|\bmañana\b/,          ()=>addDays(1)],
+      [/\bdem[àa](?![a-zà-ÿ])|\bmañana\b/, ()=>addDays(1)],
       [/la setmana que ve|la semana que viene|la próxima semana/, ()=>addDays(7)],
       [new RegExp(`(?:el proper |el |el próximo )?(${allDays.join('|')})`), m=>{
         const raw=m[1]; const di=dayNames.indexOf(raw)!==-1?dayNames.indexOf(raw):dayNamesEs.indexOf(raw);
         const diff=(di-now.getDay()+7)%7||7; return addDays(diff);
       }],
-      [/el (\d{1,2}) de (\w+)/, m=>{
+      [/el (\d{1,2}) de ([a-zà-ÿ]+)/, m=>{
         const mi=monthNames.indexOf(m[2])!==-1?monthNames.indexOf(m[2]):monthNamesEs.indexOf(m[2]);
         if(mi===-1) return null;
         const d=new Date(now.getFullYear(),mi,parseInt(m[1]));
@@ -775,7 +775,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.6</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.7</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -1387,7 +1387,7 @@ function DeleteSeriesModal({task,onConfirm,onClose}) {
 // ─── NEW TASK MODAL ───────────────────────────────────────────────────────────
 function NewTaskModal({lists,defaultList,onSave,onClose,preFill}) {
   const [form,setForm] = useState({
-    title:preFill?.title||'',description:'',startDate:today,
+    title:preFill?.title||'',description:'',startDate:preFill?.endDate||today,
     endDate:preFill?.endDate||'',startTime:'',endTime:preFill?.endTime||'',
     priority:'mitjana',status:'pendent',tags:[],
     listId:defaultList||lists[0]?.id||'',subtasks:[],customValues:{},
