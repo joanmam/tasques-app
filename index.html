@@ -290,10 +290,12 @@ const REMINDER_OPTIONS = [
 ];
 const tagColor = t => TAG_COLORS[Math.abs([...t].reduce((a,c)=>a+c.charCodeAt(0),0))%TAG_COLORS.length];
 const fmt = d => d ? new Date(d+'T12:00').toLocaleDateString('ca-ES',{day:'2-digit',month:'short'}) : '';
-const today = new Date().toISOString().split('T')[0];
+// YYYY-MM-DD en hora local (evita el desfasament de toISOString amb fusos horaris)
+const ymd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const today = ymd(new Date());
 const isOverdue = t => t.endDate && t.endDate < today && t.status !== 'completada';
-const tomorrowStr = (() => { const d=new Date(); d.setDate(d.getDate()+1); return d.toISOString().split('T')[0]; })();
-const weekLaterStr = (() => { const d=new Date(); d.setDate(d.getDate()+7); return d.toISOString().split('T')[0]; })();
+const tomorrowStr = (() => { const d=new Date(); d.setDate(d.getDate()+1); return ymd(d); })();
+const weekLaterStr = (() => { const d=new Date(); d.setDate(d.getDate()+7); return ymd(d); })();
 const dateCategory = t => {
   if (!t.endDate) return 'nodate';
   if (t.endDate < today) return 'overdue';
@@ -324,7 +326,7 @@ const nextOccurrence = (dateStr, recurrence) => {
       break;
     default: return null;
   }
-  return d.toISOString().split('T')[0];
+  return ymd(d);
 };
 
 const Ic = {
@@ -448,7 +450,7 @@ function App() {
   useEffect(()=>{
     if (!user) return;
     const oneYearAgo = new Date(); oneYearAgo.setFullYear(oneYearAgo.getFullYear()-1);
-    const yearAgoStr = oneYearAgo.toISOString().split('T')[0];
+    const yearAgoStr = ymd(oneYearAgo);
     const unsubT = db.collection('tasks').where('ownerId','==',user.uid)
       .onSnapshot(snap=>{
         setTasks(snap.docs.map(d=>({id:d.id,...d.data()}))
@@ -535,7 +537,7 @@ function App() {
     const lower = text.toLowerCase();
     let endDate = '', endTime = '';
     const now = new Date();
-    const addDays = n => { const d=new Date(now); d.setDate(d.getDate()+n); return d.toISOString().split('T')[0]; };
+    const addDays = n => { const d=new Date(now); d.setDate(d.getDate()+n); return ymd(d); };
     const dayNames = ['diumenge','dilluns','dimarts','dimecres','dijous','divendres','dissabte'];
     const dayNamesEs = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
     const monthNames = ['gener','febrer','març','abril','maig','juny','juliol','agost','setembre','octubre','novembre','desembre'];
@@ -574,7 +576,7 @@ function App() {
         if(mi===-1) return null;
         const d=new Date(now.getFullYear(),mi,parseInt(m[1]));
         if(d<now) d.setFullYear(d.getFullYear()+1);
-        return d.toISOString().split('T')[0];
+        return ymd(d);
       }],
     ];
     for (const [re,fn] of dateRules) {
@@ -618,7 +620,7 @@ function App() {
       } else {
         limitDt.setFullYear(limitDt.getFullYear() + 1); // màxim 1 any
       }
-      const limitStr = data.recurrenceEndDate || limitDt.toISOString().split('T')[0];
+      const limitStr = data.recurrenceEndDate || ymd(limitDt);
       // Genera les dates
       const dates = [];
       let cur = seriesStart;
@@ -703,13 +705,13 @@ function App() {
       const dt = new Date(`${base}T${baseTime}`);
       dt.setHours(dt.getHours()+1);
       await db.collection('tasks').doc(task.id).update({
-        endDate: dt.toISOString().split('T')[0],
+        endDate: ymd(dt),
         endTime: dt.toTimeString().slice(0,5)
       });
     } else {
       const dt = new Date(base+'T12:00');
       dt.setDate(dt.getDate()+1);
-      await db.collection('tasks').doc(task.id).update({endDate:dt.toISOString().split('T')[0]});
+      await db.collection('tasks').doc(task.id).update({endDate:ymd(dt)});
     }
   };
   const toggleTrack = async task => {
@@ -773,7 +775,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.3</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.4</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -1500,7 +1502,7 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask}) {
   const totalCells  = Math.ceil((startOffset+lastDay.getDate())/7)*7;
   const cells = Array.from({length:totalCells},(_,i)=>{
     const d = new Date(year,month,1-startOffset+i);
-    return {date:d,dateStr:d.toISOString().split('T')[0],inMonth:d.getMonth()===month};
+    return {date:d,dateStr:ymd(d),inMonth:d.getMonth()===month};
   });
   const tasksForDay = dateStr => tasks.filter(t=>{
     const start=t.startDate||t.endDate; const end=t.endDate||t.startDate;
@@ -1595,7 +1597,7 @@ function getTaskOccurrences(task, startStr, endStr) {
 
 function getSeriesStart(task) {
   // Data d'inici de la sèrie: createdAt > startDate > endDate
-  if (task.createdAt?.toDate) return task.createdAt.toDate().toISOString().split('T')[0];
+  if (task.createdAt?.toDate) return ymd(task.createdAt.toDate());
   if (task.startDate) return task.startDate;
   return task.endDate || today;
 }
@@ -1608,7 +1610,7 @@ function getPeriodDays(seriesStart, period) {
   else end.setFullYear(end.getFullYear()+1);
   const days = [];
   const d = new Date(start);
-  while (d <= end) { days.push(d.toISOString().split('T')[0]); d.setDate(d.getDate()+1); }
+  while (d <= end) { days.push(ymd(d)); d.setDate(d.getDate()+1); }
   return days;
 }
 
