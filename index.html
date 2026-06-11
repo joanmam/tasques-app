@@ -775,7 +775,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.5</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.6</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -1536,11 +1536,12 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask}) {
               <div className="cal-day-num">{date.getDate()}</div>
               {visible.map(t=>{
                 const list=lists.find(l=>l.id===t.listId);
-                const color=list?.color||'var(--accent)';
+                const overdue=isOverdue(t);
+                const color=overdue?'var(--danger)':(list?.color||'var(--accent)');
                 return <div key={t.id} className="cal-task-chip"
                   style={{background:color+'22',color}}
                   onClick={e=>{e.stopPropagation();onSelectTask(t);setPopup(null);}}
-                  title={t.title}>{t.status==='completada'?'✓ ':''}{t.title}</div>;
+                  title={t.title}>{t.status==='completada'?'✓ ':overdue?'⚠ ':''}{t.title}</div>;
               })}
               {extra>0&&<div className="cal-more">+{extra} més</div>}
               {isPopup&&dayTasks.length>MAX&&(
@@ -1548,9 +1549,10 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask}) {
                   <h4>{date.toLocaleDateString('ca-ES',{day:'numeric',month:'long'})}</h4>
                   {dayTasks.map(t=>{
                     const list=lists.find(l=>l.id===t.listId);
+                    const overdue=isOverdue(t);
                     return <div key={t.id} className="cal-popup-task" onClick={()=>{onSelectTask(t);setPopup(null);}}>
                       <span className={`priority-dot p-${t.priority}`}/>
-                      <span style={{flex:1}}>{t.title}</span>
+                      <span style={{flex:1,color:overdue?'var(--danger)':undefined}}>{overdue?'⚠ ':''}{t.title}</span>
                       {list&&<span style={{fontSize:10,color:list.color}}>{list.name}</span>}
                     </div>;
                   })}
