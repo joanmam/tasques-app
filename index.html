@@ -439,6 +439,7 @@ function App() {
   const [showListModal,setShowListModal] = useState(false);
   const [editingList,setEditingList]     = useState(null);
   const [showDefaultFields,setShowDefaultFields] = useState(false);
+  const [deleteConfirm,setDeleteConfirm]   = useState(null);
   const [darkMode,setDarkMode]           = useState(()=>load('tq_dark',false));
   const [view,setView]                   = useState('list');
 
@@ -656,6 +657,28 @@ function App() {
     await db.collection('tasks').doc(id).delete();
     if (selectedTask?.id===id) setSelectedTask(null);
   };
+  const requestDelete = task => {
+    if (task.seriesId) setDeleteConfirm(task);
+    else deleteTask(task.id);
+  };
+  const deleteSeries = async (task,mode) => {
+    setSyncing(true);
+    if (mode==='this') {
+      await deleteTask(task.id);
+    } else {
+      const snap = await db.collection('tasks').where('seriesId','==',task.seriesId).get();
+      const batch = db.batch();
+      snap.docs.forEach(d=>{
+        const data=d.data();
+        if (mode==='all' || (mode==='future' && (data.endDate||'')>=(task.endDate||''))) {
+          batch.delete(d.ref);
+        }
+      });
+      await batch.commit();
+      if (selectedTask?.seriesId===task.seriesId) setSelectedTask(null);
+    }
+    setSyncing(false); setDeleteConfirm(null);
+  };
   const toggleStatus = async (id,current) => {
     const task = tasks.find(t=>t.id===id); if (!task) return;
     if (current!=='completada') {
@@ -750,7 +773,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.2</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.3</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -857,7 +880,7 @@ function App() {
                     </div>
                     {grpTasks.map(t=><TaskItem key={t.id} task={t} lists={lists}
                       selected={selectedTask?.id===t.id} onClick={()=>setSelectedTask(t)}
-                      onToggle={()=>toggleStatus(t.id,t.status)} onDelete={()=>deleteTask(t.id)}
+                      onToggle={()=>toggleStatus(t.id,t.status)} onDelete={()=>requestDelete(t)}
                       onDelay={(task,type)=>delayTask(task,type)} onTrack={toggleTrack}/>)}
                   </div>
                 );
@@ -881,7 +904,7 @@ function App() {
 
         {selectedTask&&(
           <DetailPanel task={selectedTask} lists={lists}
-            onUpdate={updateTask} onDelete={()=>deleteTask(selectedTask.id)}
+            onUpdate={updateTask} onDelete={()=>requestDelete(selectedTask)}
             onClose={()=>setSelectedTask(null)} onDelay={delayTask}/>
         )}
       </div>
@@ -893,6 +916,7 @@ function App() {
       {showListModal&&<NewListModal onSave={addList} onClose={()=>setShowListModal(false)}/>}
       {editingList&&<ListSettingsModal list={editingList} onSave={(id,data)=>updateList(id,data)} onClose={()=>setEditingList(null)}/>}
       {showDefaultFields&&<DefaultFieldsModal fields={defaultFields} onSave={saveDefaultFields} onClose={()=>setShowDefaultFields(false)}/>}
+      {deleteConfirm&&<DeleteSeriesModal task={deleteConfirm} onConfirm={mode=>deleteSeries(deleteConfirm,mode)} onClose={()=>setDeleteConfirm(null)}/>}
       {toast&&<div className="toast"><span style={{color:'var(--success)',fontSize:15}}>✓</span>{toast.replace('✓ ','')}</div>}
     </>
   );
@@ -1332,6 +1356,26 @@ function NewListModal({onSave,onClose}) {
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancel·lar</button>
           <button className="btn btn-primary" onClick={()=>name.trim()&&onSave({name,color})}>Crear</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── DELETE SERIES MODAL ─────────────────────────────────────────────────────
+function DeleteSeriesModal({task,onConfirm,onClose}) {
+  return (
+    <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className="modal modal-sm">
+        <h2>Eliminar tasca recurrent</h2>
+        <p style={{fontSize:13,color:'var(--text2)'}}>"{task.title}" forma part d'una sèrie. Què vols eliminar?</p>
+        <div style={{display:'flex',flexDirection:'column',gap:8,marginTop:8}}>
+          <button className="btn btn-ghost" style={{justifyContent:'flex-start'}} onClick={()=>onConfirm('this')}>Només aquesta ocurrència</button>
+          <button className="btn btn-ghost" style={{justifyContent:'flex-start'}} onClick={()=>onConfirm('future')}>Aquesta i les futures</button>
+          <button className="btn btn-danger-soft" style={{justifyContent:'flex-start'}} onClick={()=>onConfirm('all')}>Tota la sèrie</button>
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel·lar</button>
         </div>
       </div>
     </div>
