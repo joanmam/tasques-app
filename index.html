@@ -775,7 +775,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.7</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.8</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -1208,6 +1208,8 @@ function FieldsManager({fields,onChange}) {
   const [showAdd,setShowAdd] = useState(false);
   const [newField,setNewField] = useState({name:'',type:'text',options:[]});
   const [newOption,setNewOption] = useState('');
+  const [editingId,setEditingId] = useState(null);
+  const [editOption,setEditOption] = useState('');
   const addField = () => {
     if (!newField.name.trim()) return;
     onChange([...fields,{...newField,id:uid(),name:newField.name.trim()}]);
@@ -1218,19 +1220,51 @@ function FieldsManager({fields,onChange}) {
     if (!newOption.trim()) return;
     setNewField(f=>({...f,options:[...f.options,newOption.trim()]})); setNewOption('');
   };
+  const addExistingOption = id => {
+    if (!editOption.trim()) return;
+    onChange(fields.map(f=>f.id===id?{...f,options:[...(f.options||[]),editOption.trim()]}:f));
+    setEditOption('');
+  };
+  const removeExistingOption = (id,opt) => {
+    onChange(fields.map(f=>f.id===id?{...f,options:(f.options||[]).filter(o=>o!==opt)}:f));
+  };
   const typeLabel = t => FIELD_TYPES.find(x=>x.value===t)?.label||t;
   return (
     <div>
       {fields.length===0&&!showAdd&&<p style={{fontSize:12,color:'var(--text3)',marginBottom:10}}>Cap camp personalitzat.</p>}
       {fields.map(f=>(
-        <div key={f.id} className="field-row">
-          <span style={{width:12,height:12,color:'var(--text3)',flexShrink:0}}>{Ic.drag}</span>
-          <span className="field-row-name">{f.name}</span>
-          <span className="field-type-badge">{typeLabel(f.type)}</span>
-          {f.type==='select'&&<span style={{fontSize:10,color:'var(--text3)'}}>{(f.options||[]).length} opc</span>}
-          <div className="field-actions">
-            <button className="field-action-btn danger" onClick={()=>removeField(f.id)}>{Ic.trash}</button>
+        <div key={f.id}>
+          <div className="field-row">
+            <span style={{width:12,height:12,color:'var(--text3)',flexShrink:0}}>{Ic.drag}</span>
+            <span className="field-row-name">{f.name}</span>
+            <span className="field-type-badge">{typeLabel(f.type)}</span>
+            {f.type==='select'&&(
+              <span style={{fontSize:10,color:'var(--text3)',cursor:'pointer',textDecoration:'underline'}}
+                onClick={()=>{setEditingId(editingId===f.id?null:f.id);setEditOption('');}}>
+                {(f.options||[]).length} opc
+              </span>
+            )}
+            <div className="field-actions">
+              <button className="field-action-btn danger" onClick={()=>removeField(f.id)}>{Ic.trash}</button>
+            </div>
           </div>
+          {editingId===f.id&&f.type==='select'&&(
+            <div className="add-field-form" style={{marginTop:4,marginBottom:8}}>
+              <div style={{fontSize:11,color:'var(--text3)',marginBottom:6}}>Opcions:</div>
+              {(f.options||[]).map(o=>(
+                <div key={o} className="option-row" style={{marginBottom:4}}>
+                  <span style={{flex:1,fontSize:13}}>{o}</span>
+                  <button className="option-del" onClick={()=>removeExistingOption(f.id,o)}>×</button>
+                </div>
+              ))}
+              <div className="option-row">
+                <input className="input" placeholder="Nova opció..." value={editOption}
+                  onChange={e=>setEditOption(e.target.value)}
+                  onKeyDown={e=>e.key==='Enter'&&addExistingOption(f.id)} style={{flex:1}}/>
+                <button className="btn btn-ghost" style={{padding:'6px 10px',fontSize:12}} onClick={()=>addExistingOption(f.id)}>+</button>
+              </div>
+            </div>
+          )}
         </div>
       ))}
       {showAdd ? (
