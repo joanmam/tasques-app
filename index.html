@@ -137,6 +137,7 @@
     .detail-header h3{font-size:14px;font-weight:600}
     .detail-body{padding:16px;display:flex;flex-direction:column;gap:12px}
     .detail-field label{display:block;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:5px}
+    .detail-field label svg{width:11px;height:11px;vertical-align:-1px;margin-right:3px}
     .detail-title-input{width:100%;background:transparent;border:none;color:var(--text);font-size:15px;font-weight:600;font-family:inherit;outline:none;padding:0}
     .detail-desc{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;padding:9px 11px;resize:vertical;min-height:60px;outline:none}
     .detail-desc:focus{border-color:var(--accent)}
@@ -775,7 +776,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.8</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.10</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -1507,6 +1508,22 @@ function NewTaskModal({lists,defaultList,onSave,onClose,preFill}) {
               onKeyDown={e=>{if(e.key==='Enter'||e.key===','){e.preventDefault();addTag(tagInput);}}}/>
           </div>
         </div>
+        {(()=>{
+          const selList = lists.find(l=>l.id===form.listId);
+          const customFields = selList?.fields||[];
+          if(!customFields.length) return null;
+          return (
+            <div className="custom-fields-section">
+              <div className="custom-fields-title"><span>Camps de la llista</span></div>
+              {customFields.map(f=>(
+                <div key={f.id} style={{marginBottom:10}}>
+                  <label style={{fontSize:10,color:'var(--text3)',display:'block',marginBottom:3}}>{f.name}</label>
+                  <CustomFieldInput field={f} value={form.customValues[f.id]} onChange={v=>set('customValues',{...form.customValues,[f.id]:v})}/>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancel·lar</button>
           <button className="btn btn-primary" onClick={submit}>Crear tasca</button>
