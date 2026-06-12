@@ -776,7 +776,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.10</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.11</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -1079,6 +1079,17 @@ function DetailPanel({task,lists,onUpdate,onDelete,onClose,onDelay}) {
             <input type="time" className="detail-date" value={local.endTime||''} onChange={e=>push({endTime:e.target.value})}/>
           </div>
         </div>
+        {customFields.length>0&&(
+          <div className="custom-fields-section">
+            <div className="custom-fields-title"><span>Camps de la llista</span></div>
+            {customFields.map(f=>(
+              <div key={f.id} className="detail-field" style={{marginBottom:10}}>
+                <label>{f.name}</label>
+                <CustomFieldInput field={f} value={customValues[f.id]} onChange={v=>setCustomValue(f.id,v)}/>
+              </div>
+            ))}
+          </div>
+        )}
         {/* Delay buttons */}
         {local.status!=='completada'&&(
           <div className="detail-field">
@@ -1165,17 +1176,6 @@ function DetailPanel({task,lists,onUpdate,onDelete,onClose,onDelay}) {
             <button className="add-subtask-btn" onClick={addSubtask}>{Ic.plus} Afegir subtasca</button>
           </div>
         </div>
-        {customFields.length>0&&(
-          <div className="custom-fields-section">
-            <div className="custom-fields-title"><span>Camps de la llista</span></div>
-            {customFields.map(f=>(
-              <div key={f.id} className="detail-field" style={{marginBottom:10}}>
-                <label>{f.name}</label>
-                <CustomFieldInput field={f} value={customValues[f.id]} onChange={v=>setCustomValue(f.id,v)}/>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );
