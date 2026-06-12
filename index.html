@@ -96,6 +96,9 @@
     .filter-chip:hover{border-color:var(--accent);color:var(--accent)}
     .filter-chip.active{background:rgba(79,142,247,.12);border-color:var(--accent);color:var(--accent)}
     .filter-sep{color:var(--text3);font-size:12px;margin:0 2px}
+    .more-filters{position:relative}
+    .more-filters-panel{position:absolute;top:calc(100% + 6px);left:0;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px;min-width:200px;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.3);display:flex;flex-direction:column;gap:10px}
+    .more-filters-panel label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);display:block;margin-bottom:4px}
     .content{flex:1;overflow-y:auto;padding:14px 24px}
     .task-group-title{font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--text3);margin:14px 0 7px}
     .task-item{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:10px;background:var(--card);border:1px solid var(--border);margin-bottom:5px;cursor:pointer;transition:all .15s;animation:fadeIn .15s ease}
@@ -436,6 +439,8 @@ function App() {
   const [filterStatus,setFilterStatus]   = useState('all');
   const [filterPriority,setFilterPriority] = useState('all');
   const [filterTag,setFilterTag]         = useState('all');
+  const [filterCustom,setFilterCustom]   = useState({});
+  const [showMoreFilters,setShowMoreFilters] = useState(false);
   const [showModal,setShowModal]         = useState(false);
   const [voiceListening,setVoiceListening] = useState(false);
   const [voicePreFill,setVoicePreFill]   = useState(null);
@@ -447,6 +452,14 @@ function App() {
   const [view,setView]                   = useState('list');
 
   useEffect(()=>auth.onAuthStateChanged(u=>setUser(u??null)),[]);
+  useEffect(()=>{setFilterCustom({});setShowMoreFilters(false);},[selectedList]);
+  const moreFiltersRef = useRef(null);
+  useEffect(()=>{
+    if (!showMoreFilters) return;
+    const h = e => {if(moreFiltersRef.current&&!moreFiltersRef.current.contains(e.target))setShowMoreFilters(false);};
+    document.addEventListener('mousedown',h);
+    return ()=>document.removeEventListener('mousedown',h);
+  },[showMoreFilters]);
 
   useEffect(()=>{
     if (!user) return;
@@ -748,12 +761,26 @@ function App() {
   };
 
   const allTags = [...new Set(tasks.flatMap(t=>t.tags||[]))];
+  // Camps personalitzats de la llista seleccionada que es poden filtrar (select/checkbox)
+  const customFilterFields = (selectedList!=='all'&&selectedList!=='today'&&selectedList!=='seguiment')
+    ? (lists.find(l=>l.id===selectedList)?.fields||[]).filter(f=>f.type==='select'||f.type==='checkbox')
+    : [];
   const filtered = tasks.filter(t=>{
     if (selectedList==='today'){if(t.startDate!==today&&t.endDate!==today)return false;}
     else if (selectedList!=='all'&&selectedList!=='seguiment'){if(t.listId!==selectedList)return false;}
     if (filterStatus!=='all'&&t.status!==filterStatus) return false;
     if (filterPriority!=='all'&&t.priority!==filterPriority) return false;
     if (filterTag!=='all'&&!(t.tags||[]).includes(filterTag)) return false;
+    for (const f of customFilterFields) {
+      const fv = filterCustom[f.id];
+      if (fv===undefined||fv==='all') continue;
+      const cv = (t.customValues||{})[f.id];
+      if (f.type==='checkbox') {
+        if (String(!!cv)!==fv) return false;
+      } else {
+        if ((cv??'')!==fv) return false;
+      }
+    }
     return true;
   });
   const pendents    = filtered.filter(t=>t.status!=='completada');
@@ -776,7 +803,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.11</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.12</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -866,6 +893,41 @@ function App() {
               {[['all','Totes'],['alta','Alta'],['mitjana','Mitjana'],['baixa','Baixa']].map(([v,l])=>(
                 <button key={v} className={`filter-chip ${filterPriority===v?'active':''}`} onClick={()=>setFilterPriority(v)}>{l}</button>
               ))}
+              {customFilterFields.length>0 && (
+                <>
+                  <span className="filter-sep">|</span>
+                  <div className="more-filters" ref={moreFiltersRef}>
+                    <button className={`filter-chip ${Object.values(filterCustom).some(v=>v&&v!=='all')?'active':''}`}
+                      onClick={()=>setShowMoreFilters(s=>!s)}>
+                      Més filtres {Object.values(filterCustom).filter(v=>v&&v!=='all').length>0?`(${Object.values(filterCustom).filter(v=>v&&v!=='all').length})`:'▾'}
+                    </button>
+                    {showMoreFilters && (
+                      <div className="more-filters-panel">
+                        {customFilterFields.map(f=>(
+                          <div key={f.id}>
+                            <label>{f.name}</label>
+                            {f.type==='checkbox' ? (
+                              <select className="input" value={filterCustom[f.id]??'all'} onChange={e=>setFilterCustom(fc=>({...fc,[f.id]:e.target.value}))}>
+                                <option value="all">Tots</option>
+                                <option value="true">Sí</option>
+                                <option value="false">No</option>
+                              </select>
+                            ) : (
+                              <select className="input" value={filterCustom[f.id]??'all'} onChange={e=>setFilterCustom(fc=>({...fc,[f.id]:e.target.value}))}>
+                                <option value="all">Tots</option>
+                                {(f.options||[]).map(o=><option key={o} value={o}>{o}</option>)}
+                              </select>
+                            )}
+                          </div>
+                        ))}
+                        {Object.values(filterCustom).some(v=>v&&v!=='all') && (
+                          <button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px'}} onClick={()=>setFilterCustom({})}>Netejar</button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
             <div className="content">
               {pendents.length===0&&completades.length===0&&(
