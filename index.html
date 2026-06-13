@@ -305,7 +305,13 @@ const ymd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-$
 const today = ymd(new Date());
 const isOverdue = t => t.endDate && t.endDate < today && t.status !== 'completada';
 const tomorrowStr = (() => { const d=new Date(); d.setDate(d.getDate()+1); return ymd(d); })();
+const threeDayLaterStr = (() => { const d=new Date(); d.setDate(d.getDate()+3); return ymd(d); })();
 const weekLaterStr = (() => { const d=new Date(); d.setDate(d.getDate()+7); return ymd(d); })();
+// Data "representativa" d'una tasca per filtres ràpids (Avui/Demà/Pròxims dies):
+// per ocurrències de sèries repetides és la pròpia ocurrència (endDate); per la resta, endDate o startDate.
+const taskDueStr = t => t.seriesId ? t.endDate : (t.endDate || t.startDate || '');
+// Vistes ràpides per data, mostrades a la barra lateral sota "Avui"
+const DATE_QUICK_VIEWS = ['today','tomorrow','next3','next7'];
 // ─── GOOGLE CALENDAR ────────────────────────────────────────────────────────
 const GCAL_TOKEN_KEY = 'tq_gcal_token';
 const GCAL_EXPIRY_KEY = 'tq_gcal_token_expiry';
@@ -857,7 +863,7 @@ function App() {
 
   const allTags = [...new Set(tasks.flatMap(t=>t.tags||[]))];
   // Camps personalitzats de la llista seleccionada que es poden filtrar (select/checkbox)
-  const customFilterFields = (selectedList!=='all'&&selectedList!=='today'&&selectedList!=='seguiment')
+  const customFilterFields = (!DATE_QUICK_VIEWS.includes(selectedList)&&selectedList!=='all'&&selectedList!=='seguiment')
     ? (lists.find(l=>l.id===selectedList)?.fields||[]).filter(f=>f.type==='select'||f.type==='checkbox')
     : [];
   const filtered = tasks.filter(t=>{
@@ -867,6 +873,9 @@ function App() {
       if (t.seriesId) { if (t.endDate!==today) return false; }
       else if (t.startDate!==today&&t.endDate!==today) return false;
     }
+    else if (selectedList==='tomorrow'){ if (taskDueStr(t)!==tomorrowStr) return false; }
+    else if (selectedList==='next3'){ const d=taskDueStr(t); if(!d||d<today||d>threeDayLaterStr) return false; }
+    else if (selectedList==='next7'){ const d=taskDueStr(t); if(!d||d<today||d>weekLaterStr) return false; }
     else if (selectedList!=='all'&&selectedList!=='seguiment'){if(t.listId!==selectedList)return false;}
     if (filterStatus!=='all'&&t.status!==filterStatus) return false;
     if (filterPriority!=='all'&&t.priority!==filterPriority) return false;
@@ -885,11 +894,19 @@ function App() {
   });
   const pendents    = filtered.filter(t=>t.status!=='completada');
   const completades = filtered.filter(t=>t.status==='completada');
-  const countFor = id => tasks.filter(t=>id==='today'
-    ?(t.seriesId?t.endDate===today:(t.startDate===today||t.endDate===today))&&t.status!=='completada'
-    :t.listId===id&&t.status!=='completada').length;
+  const countFor = id => tasks.filter(t=>{
+    if (t.status==='completada') return false;
+    if (id==='today') return t.seriesId?t.endDate===today:(t.startDate===today||t.endDate===today);
+    if (id==='tomorrow') return taskDueStr(t)===tomorrowStr;
+    if (id==='next3') { const d=taskDueStr(t); return d&&d>=today&&d<=threeDayLaterStr; }
+    if (id==='next7') { const d=taskDueStr(t); return d&&d>=today&&d<=weekLaterStr; }
+    return t.listId===id;
+  }).length;
   const listName = selectedList==='all'?'Totes les tasques'
     :selectedList==='today'?'Avui'
+    :selectedList==='tomorrow'?'Demà'
+    :selectedList==='next3'?'Pròxims 3 dies'
+    :selectedList==='next7'?'Pròxims 7 dies'
     :selectedList==='seguiment'?'Seguiment'
     :lists.find(l=>l.id===selectedList)?.name??'';
 
@@ -903,7 +920,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.18</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.19</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -922,6 +939,12 @@ function App() {
               active={selectedList==='all'} onClick={()=>setSelectedList('all')}/>
             <SidebarItem icon={Ic.today} label="Avui" count={countFor('today')}
               active={selectedList==='today'} onClick={()=>setSelectedList('today')}/>
+            <SidebarItem icon={Ic.calendar} label="Demà" count={countFor('tomorrow')}
+              active={selectedList==='tomorrow'} onClick={()=>setSelectedList('tomorrow')}/>
+            <SidebarItem icon={Ic.calendar} label="Pròxims 3 dies" count={countFor('next3')}
+              active={selectedList==='next3'} onClick={()=>setSelectedList('next3')}/>
+            <SidebarItem icon={Ic.calendar} label="Pròxims 7 dies" count={countFor('next7')}
+              active={selectedList==='next7'} onClick={()=>setSelectedList('next7')}/>
             <SidebarItem icon={Ic.chart} label="Seguiment"
               active={selectedList==='seguiment'} onClick={()=>setSelectedList('seguiment')}/>
           </div>
@@ -1090,7 +1113,7 @@ function App() {
       </div>
 
       {showModal&&<NewTaskModal lists={lists}
-        defaultList={selectedList!=='all'&&selectedList!=='today'&&selectedList!=='seguiment'?selectedList:lists[0]?.id}
+        defaultList={(!DATE_QUICK_VIEWS.includes(selectedList)&&selectedList!=='all'&&selectedList!=='seguiment')?selectedList:lists[0]?.id}
         preFill={voicePreFill}
         onSave={addTask} onClose={()=>{setShowModal(false);setVoicePreFill(null);}}/>}
       {showListModal&&<NewListModal onSave={addList} onClose={()=>setShowListModal(false)}/>}
