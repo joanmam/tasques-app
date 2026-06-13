@@ -10,6 +10,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
   <script>
     const firebaseConfig = {
@@ -23,6 +24,9 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const auth = firebase.auth();
+    // Client ID OAuth de Google (Google Cloud Console > Credencials > ID de client OAuth 2.0, tipus "Aplicació web")
+    // Cal habilitar la "Google Calendar API" al projecte i afegir l'origen (URL de l'app) a "Orígens autoritzats de JavaScript"
+    const GOOGLE_CLIENT_ID = "887341396041-6b8uo2dl9u39o5os1gba2llbbvp6i2ss.apps.googleusercontent.com";
   </script>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -210,6 +214,8 @@
     .cal-day.today .cal-day-num{background:var(--accent);color:white}
     .cal-task-chip{font-size:10px;font-weight:500;padding:2px 6px;border-radius:4px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;transition:opacity .1s}
     .cal-task-chip:hover{opacity:.75}
+    .cal-gcal-chip{background:rgba(79,142,247,.12);color:#4f8ef7;cursor:default}
+    .cal-gcal-chip:hover{opacity:1}
     .cal-more{font-size:10px;color:var(--text3);margin-top:2px}
     .cal-day-tasks-popup{position:absolute;top:100%;left:0;z-index:50;min-width:200px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px;box-shadow:0 8px 30px rgba(0,0,0,.15);margin-top:4px}
     .cal-day-tasks-popup h4{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px}
@@ -300,6 +306,58 @@ const today = ymd(new Date());
 const isOverdue = t => t.endDate && t.endDate < today && t.status !== 'completada';
 const tomorrowStr = (() => { const d=new Date(); d.setDate(d.getDate()+1); return ymd(d); })();
 const weekLaterStr = (() => { const d=new Date(); d.setDate(d.getDate()+7); return ymd(d); })();
+// ─── GOOGLE CALENDAR ────────────────────────────────────────────────────────
+const GCAL_TOKEN_KEY = 'tq_gcal_token';
+const GCAL_EXPIRY_KEY = 'tq_gcal_token_expiry';
+const loadGcalToken = () => {
+  const tok = localStorage.getItem(GCAL_TOKEN_KEY);
+  const exp = +localStorage.getItem(GCAL_EXPIRY_KEY)||0;
+  if (tok && Date.now()<exp) return tok;
+  return null;
+};
+const saveGcalToken = (token,expiresInSec) => {
+  localStorage.setItem(GCAL_TOKEN_KEY,token);
+  localStorage.setItem(GCAL_EXPIRY_KEY, String(Date.now()+expiresInSec*1000));
+};
+const clearGcalToken = () => { localStorage.removeItem(GCAL_TOKEN_KEY); localStorage.removeItem(GCAL_EXPIRY_KEY); };
+// Converteix un esdeveniment de l'API de Google Calendar a {dateStr, title, allDay, time}
+const gcalEventToDays = (ev, cal) => {
+  const days = [];
+  const startStr = ev.start?.date || (ev.start?.dateTime||'').slice(0,10);
+  const endStr   = ev.end?.date   || (ev.end?.dateTime||'').slice(0,10);
+  if (!startStr) return days;
+  const allDay = !!ev.start?.date;
+  // Esdeveniments de tot el dia: l'end de Google és exclusiu
+  let cur = new Date(startStr+'T00:00');
+  const end = new Date((endStr||startStr)+'T00:00');
+  if (allDay && end>cur) end.setDate(end.getDate()-1);
+  let safety=0;
+  while (cur<=end && safety<60) {
+    days.push(ymd(cur));
+    cur.setDate(cur.getDate()+1);
+    safety++;
+  }
+  if (days.length===0) days.push(startStr);
+  return days.map(dateStr=>({
+    dateStr, title:ev.summary||'(sense títol)', allDay,
+    time: allDay?'':(ev.start?.dateTime||'').slice(11,16),
+    link: ev.htmlLink,
+    color: cal?.color||'#4f8ef7', calLabel: cal?.label||'Google Calendar'
+  }));
+};
+const fetchGcalEvents = async (token, calendarId, timeMinStr, timeMaxStr, cal) => {
+  const params = new URLSearchParams({
+    timeMin: new Date(timeMinStr+'T00:00:00').toISOString(),
+    timeMax: new Date(timeMaxStr+'T23:59:59').toISOString(),
+    singleEvents:'true', orderBy:'startTime', maxResults:'250'
+  });
+  const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params}`,{
+    headers:{Authorization:`Bearer ${token}`}
+  });
+  if (!res.ok) { if(res.status===401) clearGcalToken(); throw new Error('gcal-fetch-failed'); }
+  const data = await res.json();
+  return (data.items||[]).filter(ev=>ev.status!=='cancelled').flatMap(ev=>gcalEventToDays(ev, cal));
+};
 const dateCategory = t => {
   if (!t.endDate) return 'nodate';
   if (t.endDate < today) return 'overdue';
@@ -441,6 +499,37 @@ function App() {
   const [filterTag,setFilterTag]         = useState('all');
   const [filterCustom,setFilterCustom]   = useState({});
   const [showMoreFilters,setShowMoreFilters] = useState(false);
+  const [gcalToken,setGcalToken]         = useState(loadGcalToken());
+  const [gcalEvents,setGcalEvents]       = useState([]);
+  const [gcalError,setGcalError]         = useState('');
+  const connectGoogleCalendar = () => {
+    if (!GOOGLE_CLIENT_ID) { showToast("Falta configurar GOOGLE_CLIENT_ID a l'app"); return; }
+    if (!window.google?.accounts?.oauth2) { showToast('Google encara no s\'ha carregat, prova de nou'); return; }
+    const tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: 'https://www.googleapis.com/auth/calendar.readonly',
+      callback: resp => {
+        if (resp?.access_token) {
+          saveGcalToken(resp.access_token, resp.expires_in||3600);
+          setGcalToken(resp.access_token);
+          setGcalError('');
+        }
+      }
+    });
+    tokenClient.requestAccessToken();
+  };
+  const disconnectGoogleCalendar = () => {
+    clearGcalToken(); setGcalToken(null); setGcalEvents([]); setGcalError('');
+  };
+  const [gcalCalendars,setGcalCalendars] = useState([
+    {id:'primary',label:'Principal',color:'#4f8ef7'},
+    {id:'family01692891853073540554@group.calendar.google.com',label:'Familiar',color:'#4fbe96'}
+  ]);
+  const [showGcalSettings,setShowGcalSettings] = useState(false);
+  const saveGcalCalendars = async cals => {
+    setGcalCalendars(cals);
+    if (user?.uid) await db.collection('userSettings').doc(user.uid).set({gcalCalendars:cals},{merge:true});
+  };
   const [showModal,setShowModal]         = useState(false);
   const [voiceListening,setVoiceListening] = useState(false);
   const [voicePreFill,setVoicePreFill]   = useState(null);
@@ -476,7 +565,13 @@ function App() {
           .sort((a,b)=>(a.createdAt?.toMillis?.()??0)-(b.createdAt?.toMillis?.()??0)));
       });
     const unsubS = db.collection('userSettings').doc(user.uid)
-      .onSnapshot(snap=>{ if(snap.exists) setDefaultFields(snap.data().defaultFields||[]); });
+      .onSnapshot(snap=>{
+        if(snap.exists) {
+          setDefaultFields(snap.data().defaultFields||[]);
+          const cals = snap.data().gcalCalendars;
+          if (cals&&cals.length) setGcalCalendars(cals);
+        }
+      });
     const unsubCL = db.collection('completionLogs')
       .where('ownerId','==',user.uid)
       .onSnapshot(snap=>{ setCompletionLogs(snap.docs.map(d=>({id:d.id,...d.data()}))); });
@@ -803,7 +898,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.13</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.16</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -853,6 +948,20 @@ function App() {
               <span style={{width:14,height:14}}>{Ic.gear}</span>
               <span style={{fontSize:12}}>Camps per defecte</span>
             </button>
+            <button className="sidebar-item" style={{width:'100%',color:gcalToken?'var(--success)':'var(--text3)'}}
+              onClick={gcalToken?disconnectGoogleCalendar:connectGoogleCalendar}
+              title={gcalToken?'Desconnectar Google Calendar':'Mostra el teu Google Calendar al calendari'}>
+              <span style={{width:14,height:14}}>{Ic.calendar}</span>
+              <span style={{fontSize:12}}>{gcalToken?'Google Calendar connectat':'Connectar Google Calendar'}</span>
+            </button>
+            {gcalToken && (
+              <button className="sidebar-item" style={{width:'100%',color:'var(--text3)'}}
+                onClick={()=>setShowGcalSettings(true)}
+                title="Configurar calendaris de Google a mostrar">
+                <span style={{width:14,height:14}}>{Ic.gear}</span>
+                <span style={{fontSize:12}}>Calendaris de Google</span>
+              </button>
+            )}
             <div style={{padding:'8px 10px',fontSize:'10px',color:'var(--text3)'}}>
               <span className="kbd">n</span> nova &nbsp;·&nbsp; <span className="kbd">espai</span> completar
             </div>
@@ -963,7 +1072,8 @@ function App() {
               </>}
             </div>
           </>) : (
-            <CalendarView tasks={filtered} lists={lists} selectedTask={selectedTask} onSelectTask={setSelectedTask}/>
+            <CalendarView tasks={filtered} lists={lists} selectedTask={selectedTask} onSelectTask={setSelectedTask}
+              gcalToken={gcalToken} gcalEvents={gcalEvents} setGcalEvents={setGcalEvents} gcalError={gcalError} setGcalError={setGcalError} gcalCalendars={gcalCalendars}/>
           )}
         </div>
 
@@ -981,6 +1091,7 @@ function App() {
       {showListModal&&<NewListModal onSave={addList} onClose={()=>setShowListModal(false)}/>}
       {editingList&&<ListSettingsModal list={editingList} onSave={(id,data)=>updateList(id,data)} onClose={()=>setEditingList(null)}/>}
       {showDefaultFields&&<DefaultFieldsModal fields={defaultFields} onSave={saveDefaultFields} onClose={()=>setShowDefaultFields(false)}/>}
+      {showGcalSettings&&<GcalSettingsModal calendars={gcalCalendars} onSave={cals=>{saveGcalCalendars(cals);setShowGcalSettings(false);}} onClose={()=>setShowGcalSettings(false)}/>}
       {deleteConfirm&&<DeleteSeriesModal task={deleteConfirm} onConfirm={mode=>deleteSeries(deleteConfirm,mode)} onClose={()=>setDeleteConfirm(null)}/>}
       {toast&&<div className="toast"><span style={{color:'var(--success)',fontSize:15}}>✓</span>{toast.replace('✓ ','')}</div>}
     </>
@@ -1391,6 +1502,47 @@ function DefaultFieldsModal({fields,onSave,onClose}) {
   );
 }
 
+// ─── GOOGLE CALENDAR SETTINGS MODAL ────────────────────────────────────────────
+function GcalSettingsModal({calendars,onSave,onClose}) {
+  const [local,setLocal] = useState(calendars.length?calendars:[{id:'primary',label:'Principal',color:'#4f8ef7'}]);
+  const update = (i,patch) => setLocal(l=>l.map((c,idx)=>idx===i?{...c,...patch}:c));
+  const remove = i => setLocal(l=>l.filter((_,idx)=>idx!==i));
+  const add = () => setLocal(l=>[...l,{id:'',label:'',color:LIST_COLORS[(l.length)%LIST_COLORS.length]}]);
+  return (
+    <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className="modal">
+        <h2>Calendaris de Google</h2>
+        <p style={{fontSize:12,color:'var(--text2)',marginTop:-6}}>
+          Afegeix l'ID de cada calendari de Google que vulguis veure superposat al calendari de tasques.
+          L'ID es troba a la configuració del calendari a Google ("Integrar el calendari" → "ID del calendari"). Per al teu calendari principal, fes servir <code>primary</code>.
+        </p>
+        <div className="divider"/>
+        <div style={{display:'flex',flexDirection:'column',gap:10}}>
+          {local.map((cal,i)=>(
+            <div key={i} style={{display:'flex',gap:8,alignItems:'center'}}>
+              <div className="color-opts" style={{flexWrap:'nowrap'}}>
+                {LIST_COLORS.slice(0,6).map(c=><div key={c} className={`color-opt ${cal.color===c?'selected':''}`} style={{background:c,width:18,height:18}} onClick={()=>update(i,{color:c})}/>)}
+              </div>
+              <input className="input" style={{flex:1}} placeholder="ID del calendari (p.ex. primary o nom@gmail.com)"
+                value={cal.id} onChange={e=>update(i,{id:e.target.value})}/>
+              <input className="input" style={{width:110}} placeholder="Etiqueta"
+                value={cal.label} onChange={e=>update(i,{label:e.target.value})}/>
+              <button className="btn btn-ghost" style={{padding:'6px 8px'}} onClick={()=>remove(i)} title="Eliminar">
+                <span style={{width:14,height:14,display:'inline-flex'}}>{Ic.trash}</span>
+              </button>
+            </div>
+          ))}
+        </div>
+        <button className="btn btn-ghost" style={{marginTop:10}} onClick={add}>+ Afegir calendari</button>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel·lar</button>
+          <button className="btn btn-primary" onClick={()=>onSave(local.filter(c=>c.id.trim()).map(c=>({...c,label:c.label.trim()||c.id})))}>Guardar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── LIST SETTINGS MODAL ──────────────────────────────────────────────────────
 function ListSettingsModal({list,onSave,onClose}) {
   const [tab,setTab]     = useState('general');
@@ -1596,7 +1748,7 @@ function NewTaskModal({lists,defaultList,onSave,onClose,preFill}) {
 }
 
 // ─── CALENDAR VIEW ────────────────────────────────────────────────────────────
-function CalendarView({tasks,lists,selectedTask,onSelectTask}) {
+function CalendarView({tasks,lists,selectedTask,onSelectTask,gcalToken,gcalEvents,setGcalEvents,gcalError,setGcalError,gcalCalendars}) {
   const now = new Date();
   const [year,setYear]   = useState(now.getFullYear());
   const [month,setMonth] = useState(now.getMonth());
@@ -1617,12 +1769,24 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask}) {
     const d = new Date(year,month,1-startOffset+i);
     return {date:d,dateStr:ymd(d),inMonth:d.getMonth()===month};
   });
+  // Carrega els esdeveniments de Google Calendar per al mes visible
+  useEffect(()=>{
+    if (!gcalToken || !gcalCalendars?.length) { setGcalEvents([]); return; }
+    let cancelled = false;
+    Promise.all(gcalCalendars.map(cal=>
+      fetchGcalEvents(gcalToken, cal.id, cells[0].dateStr, cells[cells.length-1].dateStr, cal)
+        .catch(()=>{throw new Error('gcal-fetch-failed');})
+    )).then(results=>{if(!cancelled){setGcalEvents(results.flat());setGcalError('');}})
+      .catch(()=>{if(!cancelled)setGcalError('No s\'han pogut carregar els esdeveniments de Google Calendar. Torna a connectar.');});
+    return ()=>{cancelled=true;};
+  },[gcalToken,year,month,gcalCalendars]);
   const tasksForDay = dateStr => tasks.filter(t=>{
     // Cada ocurrència d'una tasca recurrent es mostra només el seu propi dia
     if (t.seriesId) return t.endDate === dateStr;
     const start=t.startDate||t.endDate; const end=t.endDate||t.startDate;
     if(!start)return false; return start<=dateStr&&dateStr<=end;
   });
+  const gcalForDay = dateStr => gcalEvents.filter(e=>e.dateStr===dateStr);
   const monthName = firstDay.toLocaleDateString('ca-ES',{month:'long',year:'numeric'});
   const DAYS = ['Dl','Dt','Dc','Dj','Dv','Ds','Dg'];
   return (
@@ -1640,12 +1804,15 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask}) {
         {DAYS.map(d=><div key={d} className="cal-dow">{d}</div>)}
         {cells.map(({date,dateStr,inMonth})=>{
           const dayTasks = tasksForDay(dateStr);
+          const dayGcal  = gcalForDay(dateStr);
           const isToday  = dateStr===today;
-          const MAX=3; const visible=dayTasks.slice(0,MAX); const extra=dayTasks.length-MAX;
+          const MAX=3; const visible=dayTasks.slice(0,MAX); const extraTasks=dayTasks.length-MAX;
+          const gcalVisible = dayGcal.slice(0,Math.max(0,MAX-visible.length));
+          const extra = extraTasks + (dayGcal.length-gcalVisible.length);
           const isPopup  = popup?.dateStr===dateStr;
           return (
             <div key={dateStr} className={`cal-day ${isToday?'today':''} ${!inMonth?'other-month':''}`}
-              onClick={()=>dayTasks.length>0&&setPopup(isPopup?null:{dateStr})}>
+              onClick={()=>(dayTasks.length>0||dayGcal.length>0)&&setPopup(isPopup?null:{dateStr})}>
               <div className="cal-day-num">{date.getDate()}</div>
               {visible.map(t=>{
                 const list=lists.find(l=>l.id===t.listId);
@@ -1656,8 +1823,14 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask}) {
                   onClick={e=>{e.stopPropagation();onSelectTask(t);setPopup(null);}}
                   title={t.title}>{t.status==='completada'?'✓ ':overdue?'⚠ ':''}{t.title}</div>;
               })}
+              {gcalVisible.map((e,i)=>(
+                <div key={`g${i}`} className="cal-task-chip cal-gcal-chip"
+                  style={{background:(e.color||'#4f8ef7')+'22',color:e.color||'#4f8ef7'}}
+                  onClick={ev=>ev.stopPropagation()}
+                  title={`${e.calLabel||'Google Calendar'}: ${e.title}`}>📅 {e.time?`${e.time} `:''}{e.title}</div>
+              ))}
               {extra>0&&<div className="cal-more">+{extra} més</div>}
-              {isPopup&&dayTasks.length>MAX&&(
+              {isPopup&&(dayTasks.length>MAX||dayGcal.length>0)&&(
                 <div ref={popupRef} className="cal-day-tasks-popup" onClick={e=>e.stopPropagation()}>
                   <h4>{date.toLocaleDateString('ca-ES',{day:'numeric',month:'long'})}</h4>
                   {dayTasks.map(t=>{
@@ -1669,16 +1842,29 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask}) {
                       {list&&<span style={{fontSize:10,color:list.color}}>{list.name}</span>}
                     </div>;
                   })}
+                  {dayGcal.map((e,i)=>(
+                    <div key={`g${i}`} className="cal-popup-task">
+                      <span style={{fontSize:12}}>📅</span>
+                      <span style={{flex:1}}>{e.time?`${e.time} `:''}{e.title}</span>
+                      <span style={{fontSize:10,color:e.color||'#4f8ef7'}}>{e.calLabel||'Google'}</span>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
           );
         })}
       </div>
+      {gcalError&&<p style={{fontSize:12,color:'var(--danger)',marginTop:10}}>{gcalError}</p>}
       <div style={{display:'flex',gap:12,flexWrap:'wrap',marginTop:14,fontSize:11,color:'var(--text3)'}}>
         {lists.map(l=><span key={l.id} style={{display:'flex',alignItems:'center',gap:4}}>
           <span style={{width:8,height:8,borderRadius:'50%',background:l.color,display:'inline-block'}}/>{l.name}
         </span>)}
+        {gcalToken&&gcalCalendars?.map(cal=>(
+          <span key={cal.id} style={{display:'flex',alignItems:'center',gap:4}}>
+            <span style={{width:8,height:8,borderRadius:'50%',background:cal.color||'#4f8ef7',display:'inline-block'}}/>{cal.label||cal.id}
+          </span>
+        ))}
       </div>
     </div>
   );
