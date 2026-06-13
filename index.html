@@ -380,6 +380,17 @@ const DATE_GROUPS = [
   { key:'later',    label:'Més endavant',   dot:'var(--text3)',   cls:'date-later'    },
   { key:'nodate',   label:'Sense data',     dot:'var(--border)',  cls:'date-later'    },
 ];
+// Per a les vistes ràpides "Pròxims 3/7 dies": agrupa cada dia per separat
+// (Avui / Demà / nom del dia) en lloc de fer servir les categories genèriques de DATE_GROUPS.
+const dayGroupLabel = dateStr => {
+  if (dateStr===today) return 'Avui';
+  if (dateStr===tomorrowStr) return 'Demà';
+  if (!dateStr) return 'Sense data';
+  const d = new Date(dateStr+'T12:00');
+  const label = d.toLocaleDateString('ca-ES',{weekday:'long',day:'numeric',month:'long'});
+  return label.charAt(0).toUpperCase()+label.slice(1);
+};
+const dayGroupDot = dateStr => dateStr===today?'var(--warn)':dateStr===tomorrowStr?'var(--accent)':!dateStr?'var(--border)':'var(--text2)';
 const save = (k,v) => { try{localStorage.setItem(k,JSON.stringify(v))}catch{} };
 const load = (k,d) => { try{return JSON.parse(localStorage.getItem(k))??d}catch{return d} };
 
@@ -920,7 +931,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.19</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.20</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -1070,8 +1081,16 @@ function App() {
               {pendents.length===0&&completades.length===0&&(
                 <div className="empty-state">{Ic.list}<p>Cap tasca. Crea-ne una amb <span className="kbd">n</span></p></div>
               )}
-              {DATE_GROUPS.map(grp=>{
-                const grpTasks = pendents.filter(t=>dateCategory(t)===grp.key);
+              {(selectedList==='next3'||selectedList==='next7'?
+                // Agrupa per dia concret (Avui / Demà / nom del dia), evitant l'etiqueta confusa "Pròxims 7 dies"
+                [...new Set(pendents.map(t=>taskDueStr(t)))].sort()
+                  .map(d=>({key:d||'nodate',label:dayGroupLabel(d),dot:dayGroupDot(d),
+                    tasks:pendents.filter(t=>taskDueStr(t)===d)}))
+                :
+                DATE_GROUPS.map(grp=>({key:grp.key,label:grp.label,dot:grp.dot,
+                  tasks:pendents.filter(t=>dateCategory(t)===grp.key)}))
+              ).map(grp=>{
+                const grpTasks = grp.tasks;
                 if (!grpTasks.length) return null;
                 return (
                   <div key={grp.key}>
