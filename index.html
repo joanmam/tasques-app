@@ -898,7 +898,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.16</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.17</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -1519,7 +1519,9 @@ function GcalSettingsModal({calendars,onSave,onClose}) {
         <div className="divider"/>
         <div style={{display:'flex',flexDirection:'column',gap:10}}>
           {local.map((cal,i)=>(
-            <div key={i} style={{display:'flex',gap:8,alignItems:'center'}}>
+            <div key={i} style={{display:'flex',gap:8,alignItems:'center',opacity:cal.active===false?.5:1}}>
+              <input type="checkbox" checked={cal.active!==false} onChange={e=>update(i,{active:e.target.checked})}
+                title="Mostrar/amagar aquest calendari" style={{width:16,height:16,flexShrink:0,cursor:'pointer'}}/>
               <div className="color-opts" style={{flexWrap:'nowrap'}}>
                 {LIST_COLORS.slice(0,6).map(c=><div key={c} className={`color-opt ${cal.color===c?'selected':''}`} style={{background:c,width:18,height:18}} onClick={()=>update(i,{color:c})}/>)}
               </div>
@@ -1770,16 +1772,17 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask,gcalToken,gcalEvent
     return {date:d,dateStr:ymd(d),inMonth:d.getMonth()===month};
   });
   // Carrega els esdeveniments de Google Calendar per al mes visible
+  const activeGcalCalendars = (gcalCalendars||[]).filter(c=>c.active!==false);
   useEffect(()=>{
-    if (!gcalToken || !gcalCalendars?.length) { setGcalEvents([]); return; }
+    if (!gcalToken || !activeGcalCalendars.length) { setGcalEvents([]); return; }
     let cancelled = false;
-    Promise.all(gcalCalendars.map(cal=>
+    Promise.all(activeGcalCalendars.map(cal=>
       fetchGcalEvents(gcalToken, cal.id, cells[0].dateStr, cells[cells.length-1].dateStr, cal)
         .catch(()=>{throw new Error('gcal-fetch-failed');})
     )).then(results=>{if(!cancelled){setGcalEvents(results.flat());setGcalError('');}})
       .catch(()=>{if(!cancelled)setGcalError('No s\'han pogut carregar els esdeveniments de Google Calendar. Torna a connectar.');});
     return ()=>{cancelled=true;};
-  },[gcalToken,year,month,gcalCalendars]);
+  },[gcalToken,year,month,JSON.stringify(activeGcalCalendars)]);
   const tasksForDay = dateStr => tasks.filter(t=>{
     // Cada ocurrència d'una tasca recurrent es mostra només el seu propi dia
     if (t.seriesId) return t.endDate === dateStr;
@@ -1860,7 +1863,7 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask,gcalToken,gcalEvent
         {lists.map(l=><span key={l.id} style={{display:'flex',alignItems:'center',gap:4}}>
           <span style={{width:8,height:8,borderRadius:'50%',background:l.color,display:'inline-block'}}/>{l.name}
         </span>)}
-        {gcalToken&&gcalCalendars?.map(cal=>(
+        {gcalToken&&activeGcalCalendars.map(cal=>(
           <span key={cal.id} style={{display:'flex',alignItems:'center',gap:4}}>
             <span style={{width:8,height:8,borderRadius:'50%',background:cal.color||'#4f8ef7',display:'inline-block'}}/>{cal.label||cal.id}
           </span>
