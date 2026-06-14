@@ -861,8 +861,9 @@ function App() {
     }
   };
   const addList = async data => {
-    const fields = defaultFields.map(f=>({...f,id:uid()}));
-    await db.collection('lists').add({...data,fields,ownerId:user.uid,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+    // Els "Camps per defecte" són globals i no cal copiar-los a cada llista;
+    // les llistes noves comencen sense camps propis (es poden afegir des de la configuració de la llista).
+    await db.collection('lists').add({...data,fields:[],ownerId:user.uid,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
     setShowListModal(false);
   };
   const updateList = async (id,data) => {
@@ -948,7 +949,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.23</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.24</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -1155,7 +1156,7 @@ function App() {
         </div>
 
         {selectedTask&&(
-          <DetailPanel task={selectedTask} lists={lists}
+          <DetailPanel task={selectedTask} lists={lists} defaultFields={defaultFields}
             onUpdate={updateTask} onDelete={()=>requestDelete(selectedTask)}
             onClose={()=>setSelectedTask(null)} onDelay={delayTask}/>
         )}
@@ -1251,7 +1252,7 @@ function TaskItem({task,lists,selected,onClick,onToggle,onDelete,onDelay,onTrack
 }
 
 // ─── DETAIL PANEL ─────────────────────────────────────────────────────────────
-function DetailPanel({task,lists,onUpdate,onDelete,onClose,onDelay}) {
+function DetailPanel({task,lists,defaultFields,onUpdate,onDelete,onClose,onDelay}) {
   const [local,setLocal] = useState(task);
   const [tagInput,setTagInput] = useState('');
   const timer = useRef(null);
@@ -1329,6 +1330,17 @@ function DetailPanel({task,lists,onUpdate,onDelete,onClose,onDelay}) {
             <input type="time" className="detail-date" value={local.endTime||''} onChange={e=>push({endTime:e.target.value})}/>
           </div>
         </div>
+        {(defaultFields||[]).length>0&&(
+          <div className="custom-fields-section">
+            <div className="custom-fields-title"><span>Camps per defecte</span></div>
+            {(defaultFields||[]).map(f=>(
+              <div key={f.id} className="detail-field" style={{marginBottom:10}}>
+                <label>{f.name}</label>
+                <CustomFieldInput field={f} value={customValues[f.id]} onChange={v=>setCustomValue(f.id,v)}/>
+              </div>
+            ))}
+          </div>
+        )}
         {customFields.length>0&&(
           <div className="custom-fields-section">
             <div className="custom-fields-title"><span>Camps de la llista</span></div>
@@ -1567,7 +1579,7 @@ function DefaultFieldsModal({fields,onSave,onClose}) {
     <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div className="modal">
         <h2>Camps per defecte</h2>
-        <p style={{fontSize:12,color:'var(--text2)',marginTop:-6}}>Totes les llistes noves heretaran aquests camps.</p>
+        <p style={{fontSize:12,color:'var(--text2)',marginTop:-6}}>Aquests camps surten a totes les tasques, independentment de la llista.</p>
         <div className="divider"/>
         <FieldsManager fields={local} onChange={setLocal}/>
         <div className="modal-actions">
@@ -1764,16 +1776,12 @@ function NewTaskModal({lists,defaultFields,defaultList,onSave,onClose,preFill}) 
           </select>
         </div>
         {(()=>{
-          const selList = lists.find(l=>l.id===form.listId);
-          const listFields = selList?.fields||[];
-          // Camps per defecte (configurats a "Camps per defecte"): es mostren aquí en files de 3.
-          // Es relacionen amb els camps de la llista per nom+tipus, ja que cada llista té còpies pròpies.
-          const defaultListFields = (defaultFields||[])
-            .map(df=>listFields.find(f=>f.name===df.name&&f.type===df.type))
-            .filter(Boolean);
-          if(!defaultListFields.length) return null;
+          // Camps per defecte (configurats a "Camps per defecte"): s'apliquen a totes les tasques,
+          // independentment de la llista. Es mostren aquí en files de 3.
+          const dFields = defaultFields||[];
+          if(!dFields.length) return null;
           const rows = [];
-          for (let i=0;i<defaultListFields.length;i+=3) rows.push(defaultListFields.slice(i,i+3));
+          for (let i=0;i<dFields.length;i+=3) rows.push(dFields.slice(i,i+3));
           return rows.map((row,ri)=>(
             <div className="input-row" key={ri}>
               {row.map(f=>(
