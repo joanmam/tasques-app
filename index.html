@@ -68,6 +68,11 @@
     .btn-logout svg{width:13px;height:13px}
     .sidebar-section{padding:10px 8px 4px}
     .sidebar-section-title{font-size:10px;font-weight:600;letter-spacing:.08em;color:var(--text3);text-transform:uppercase;padding:0 8px;margin-bottom:4px}
+    .sidebar-group-label{font-size:10px;font-weight:600;letter-spacing:.06em;color:var(--text3);text-transform:uppercase;padding:8px 10px 2px;opacity:.75}
+    .group-chips{display:flex;flex-wrap:wrap;gap:6px;padding:0 8px 8px}
+    .group-chip{font-size:11px;padding:3px 9px;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;transition:all .15s}
+    .group-chip:hover{color:var(--text2);border-color:var(--text3)}
+    .group-chip.active{background:rgba(79,142,247,.15);color:var(--accent);border-color:var(--accent)}
     .sidebar-item{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;cursor:pointer;font-size:13px;color:var(--text2);transition:all .15s;user-select:none}
     .sidebar-item:hover{background:var(--card-hover);color:var(--text)}
     .sidebar-item.active{background:rgba(79,142,247,.12);color:var(--accent);font-weight:500}
@@ -277,6 +282,8 @@ const TAG_COLORS = [
   {bg:'rgba(175,79,247,.15)',text:'#af4ff7'},{bg:'rgba(79,215,247,.15)',text:'#4fd7f7'},
 ];
 const LIST_COLORS = ['#4f8ef7','#4fbe96','#f7b74f','#f7604f','#af4ff7','#4fd7f7','#ff8fab','#a8e6cf'];
+// Grups predefinits per organitzar les llistes (es poden ampliar des del modal de llista)
+const LIST_GROUPS = ['Professional','Personal'];
 const FIELD_TYPES = [
   {value:'text',label:'Text'},{value:'number',label:'Número'},
   {value:'select',label:'Desplegable'},{value:'date',label:'Data'},
@@ -510,6 +517,7 @@ function App() {
   const [toast,setToast]             = useState('');
   const showToast = msg => { setToast(msg); setTimeout(()=>setToast(''),3000); };
   const [selectedList,setSelectedList]   = useState('all');
+  const [selectedGroup,setSelectedGroup] = useState('all');
   const [selectedTask,setSelectedTask]   = useState(null);
   const [filterStatus,setFilterStatus]   = useState('all');
   const [filterPriority,setFilterPriority] = useState('all');
@@ -874,9 +882,16 @@ function App() {
 
   const allTags = [...new Set(tasks.flatMap(t=>t.tags||[]))];
   // Camps personalitzats de la llista seleccionada que es poden filtrar (select/checkbox)
-  const customFilterFields = (!DATE_QUICK_VIEWS.includes(selectedList)&&selectedList!=='all'&&selectedList!=='seguiment')
+  const isSpecificList = !DATE_QUICK_VIEWS.includes(selectedList)&&selectedList!=='all'&&selectedList!=='seguiment';
+  const customFilterFields = isSpecificList
     ? (lists.find(l=>l.id===selectedList)?.fields||[]).filter(f=>f.type==='select'||f.type==='checkbox')
     : [];
+  // Grups de llistes (Professional/Personal/...) per organitzar la barra lateral i filtrar
+  const listGroupOf = listId => lists.find(l=>l.id===listId)?.group || 'Sense grup';
+  const presentGroups = [...new Set(lists.map(l=>l.group||'Sense grup'))];
+  const orderedGroups = [...LIST_GROUPS.filter(g=>presentGroups.includes(g)), ...presentGroups.filter(g=>!LIST_GROUPS.includes(g))];
+  // El filtre de grup només s'aplica a vistes generals (Totes, Avui, Demà...), no quan ja s'ha triat una llista concreta
+  const matchesGroup = t => isSpecificList || selectedGroup==='all' || listGroupOf(t.listId)===selectedGroup;
   const filtered = tasks.filter(t=>{
     if (selectedList==='today'){
       // Per a ocurrències de tasques repetides, només compta la data de l'ocurrència (endDate),
@@ -888,6 +903,7 @@ function App() {
     else if (selectedList==='next3'){ const d=taskDueStr(t); if(!d||d<today||d>threeDayLaterStr) return false; }
     else if (selectedList==='next7'){ const d=taskDueStr(t); if(!d||d<today||d>weekLaterStr) return false; }
     else if (selectedList!=='all'&&selectedList!=='seguiment'){if(t.listId!==selectedList)return false;}
+    if (!matchesGroup(t)) return false;
     if (filterStatus!=='all'&&t.status!==filterStatus) return false;
     if (filterPriority!=='all'&&t.priority!==filterPriority) return false;
     if (filterTag!=='all'&&!(t.tags||[]).includes(filterTag)) return false;
@@ -907,6 +923,7 @@ function App() {
   const completades = filtered.filter(t=>t.status==='completada');
   const countFor = id => tasks.filter(t=>{
     if (t.status==='completada') return false;
+    if (!matchesGroup(t)) return false;
     if (id==='today') return t.seriesId?t.endDate===today:(t.startDate===today||t.endDate===today);
     if (id==='tomorrow') return taskDueStr(t)===tomorrowStr;
     if (id==='next3') { const d=taskDueStr(t); return d&&d>=today&&d<=threeDayLaterStr; }
@@ -931,7 +948,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.20</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.21</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -961,10 +978,23 @@ function App() {
           </div>
           <div className="sidebar-section">
             <div className="sidebar-section-title">Llistes</div>
-            {lists.map(l=>(
-              <SidebarItem key={l.id} dot={l.color} label={l.name} count={countFor(l.id)}
-                active={selectedList===l.id} onClick={()=>setSelectedList(l.id)}
-                onSettings={()=>setEditingList(l)} onDelete={()=>deleteList(l.id)}/>
+            {orderedGroups.length>1 && (
+              <div className="group-chips">
+                <button className={`group-chip ${selectedGroup==='all'?'active':''}`} onClick={()=>setSelectedGroup('all')}>Tots</button>
+                {orderedGroups.map(g=>(
+                  <button key={g} className={`group-chip ${selectedGroup===g?'active':''}`} onClick={()=>setSelectedGroup(g===selectedGroup?'all':g)}>{g}</button>
+                ))}
+              </div>
+            )}
+            {orderedGroups.filter(g=>selectedGroup==='all'||selectedGroup===g).map(g=>(
+              <div key={g}>
+                {orderedGroups.length>1 && <div className="sidebar-group-label">{g}</div>}
+                {lists.filter(l=>(l.group||'Sense grup')===g).map(l=>(
+                  <SidebarItem key={l.id} dot={l.color} label={l.name} count={countFor(l.id)}
+                    active={selectedList===l.id} onClick={()=>setSelectedList(l.id)}
+                    onSettings={()=>setEditingList(l)} onDelete={()=>deleteList(l.id)}/>
+                ))}
+              </div>
             ))}
             <button className="add-list-btn" onClick={()=>setShowListModal(true)}>
               <span style={{fontSize:16}}>+</span> Nova llista
@@ -1135,8 +1165,8 @@ function App() {
         defaultList={(!DATE_QUICK_VIEWS.includes(selectedList)&&selectedList!=='all'&&selectedList!=='seguiment')?selectedList:lists[0]?.id}
         preFill={voicePreFill}
         onSave={addTask} onClose={()=>{setShowModal(false);setVoicePreFill(null);}}/>}
-      {showListModal&&<NewListModal onSave={addList} onClose={()=>setShowListModal(false)}/>}
-      {editingList&&<ListSettingsModal list={editingList} onSave={(id,data)=>updateList(id,data)} onClose={()=>setEditingList(null)}/>}
+      {showListModal&&<NewListModal onSave={addList} onClose={()=>setShowListModal(false)} groups={presentGroups}/>}
+      {editingList&&<ListSettingsModal list={editingList} onSave={(id,data)=>updateList(id,data)} onClose={()=>setEditingList(null)} groups={presentGroups}/>}
       {showDefaultFields&&<DefaultFieldsModal fields={defaultFields} onSave={saveDefaultFields} onClose={()=>setShowDefaultFields(false)}/>}
       {showGcalSettings&&<GcalSettingsModal calendars={gcalCalendars} onSave={cals=>{saveGcalCalendars(cals);setShowGcalSettings(false);}} onClose={()=>setShowGcalSettings(false)}/>}
       {deleteConfirm&&<DeleteSeriesModal task={deleteConfirm} onConfirm={mode=>deleteSeries(deleteConfirm,mode)} onClose={()=>setDeleteConfirm(null)}/>}
@@ -1593,12 +1623,14 @@ function GcalSettingsModal({calendars,onSave,onClose}) {
 }
 
 // ─── LIST SETTINGS MODAL ──────────────────────────────────────────────────────
-function ListSettingsModal({list,onSave,onClose}) {
+function ListSettingsModal({list,onSave,onClose,groups}) {
   const [tab,setTab]     = useState('general');
   const [name,setName]   = useState(list.name);
   const [color,setColor] = useState(list.color);
+  const [group,setGroup] = useState(list.group||LIST_GROUPS[0]);
   const [fields,setFields] = useState(list.fields||[]);
-  const save = () => onSave(list.id,{name,color,fields});
+  const allGroups = [...new Set([...LIST_GROUPS,...(groups||[])])];
+  const save = () => onSave(list.id,{name,color,group,fields});
   return (
     <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div className="modal">
@@ -1611,6 +1643,12 @@ function ListSettingsModal({list,onSave,onClose}) {
           <div className="detail-field" style={{marginTop:8}}>
             <label>Nom</label>
             <input className="input" value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&save()}/>
+          </div>
+          <div className="detail-field">
+            <label>Grup</label>
+            <select className="input" value={group} onChange={e=>setGroup(e.target.value)}>
+              {allGroups.map(g=><option key={g} value={g}>{g}</option>)}
+            </select>
           </div>
           <div>
             <label style={{fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:'.06em',color:'var(--text3)',display:'block',marginBottom:8}}>Color</label>
@@ -1635,9 +1673,11 @@ function ListSettingsModal({list,onSave,onClose}) {
 }
 
 // ─── NEW LIST MODAL ───────────────────────────────────────────────────────────
-function NewListModal({onSave,onClose}) {
+function NewListModal({onSave,onClose,groups}) {
   const [name,setName]   = useState('');
   const [color,setColor] = useState(LIST_COLORS[0]);
+  const allGroups = [...new Set([...LIST_GROUPS,...(groups||[])])];
+  const [group,setGroup] = useState(allGroups[0]||'Personal');
   const ref = useRef(null);
   useEffect(()=>ref.current?.focus(),[]);
   return (
@@ -1645,7 +1685,13 @@ function NewListModal({onSave,onClose}) {
       <div className="modal modal-sm">
         <h2>Nova llista</h2>
         <input ref={ref} className="input" placeholder="Nom" value={name}
-          onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&name.trim()&&onSave({name,color})}/>
+          onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&name.trim()&&onSave({name,color,group})}/>
+        <div className="detail-field">
+          <label>Grup</label>
+          <select className="input" value={group} onChange={e=>setGroup(e.target.value)}>
+            {allGroups.map(g=><option key={g} value={g}>{g}</option>)}
+          </select>
+        </div>
         <div>
           <label style={{fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:'.06em',color:'var(--text3)',display:'block',marginBottom:8}}>Color</label>
           <div className="color-opts">
@@ -1655,7 +1701,7 @@ function NewListModal({onSave,onClose}) {
         <p style={{fontSize:11,color:'var(--text3)'}}>Heretarà els camps per defecte.</p>
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancel·lar</button>
-          <button className="btn btn-primary" onClick={()=>name.trim()&&onSave({name,color})}>Crear</button>
+          <button className="btn btn-primary" onClick={()=>name.trim()&&onSave({name,color,group})}>Crear</button>
         </div>
       </div>
     </div>
