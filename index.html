@@ -887,6 +887,8 @@ function App() {
   const customFilterFields = isSpecificList
     ? (lists.find(l=>l.id===selectedList)?.fields||[]).filter(f=>f.type==='select'||f.type==='checkbox')
     : [];
+  // Camps per defecte filtrables (select/checkbox), aplicables a totes les vistes des de la barra lateral
+  const defaultFilterFields = (defaultFields||[]).filter(f=>f.type==='select'||f.type==='checkbox');
   // Grups de llistes (Professional/Personal/...) per organitzar la barra lateral i filtrar
   const listGroupOf = listId => lists.find(l=>l.id===listId)?.group || 'Sense grup';
   const presentGroups = [...new Set(lists.map(l=>l.group||'Sense grup'))];
@@ -909,6 +911,17 @@ function App() {
     if (filterPriority!=='all'&&t.priority!==filterPriority) return false;
     if (filterTag!=='all'&&!(t.tags||[]).includes(filterTag)) return false;
     for (const f of customFilterFields) {
+      const fv = filterCustom[f.id];
+      if (fv===undefined||fv==='all') continue;
+      const cv = (t.customValues||{})[f.id];
+      if (f.type==='checkbox') {
+        if (String(!!cv)!==fv) return false;
+      } else {
+        if ((cv??'')!==fv) return false;
+      }
+    }
+    // Filtres pels "camps per defecte" (s'apliquen a totes les vistes, des de la barra lateral)
+    for (const f of defaultFilterFields) {
       const fv = filterCustom[f.id];
       if (fv===undefined||fv==='all') continue;
       const cv = (t.customValues||{})[f.id];
@@ -949,7 +962,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.24</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.25</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -1011,6 +1024,24 @@ function App() {
               })}
             </div>
           )}
+          {defaultFilterFields.map(f=>(
+            <div className="sidebar-section" key={f.id}>
+              <div className="sidebar-section-title">{f.name}</div>
+              {f.type==='checkbox' ? (
+                ['true','false'].map(val=>(
+                  <SidebarItem key={val} label={val==='true'?'Sí':'No'}
+                    active={filterCustom[f.id]===val}
+                    onClick={()=>setFilterCustom(fc=>({...fc,[f.id]:fc[f.id]===val?'all':val}))}/>
+                ))
+              ) : (
+                (f.options||[]).map(opt=>(
+                  <SidebarItem key={opt} label={opt}
+                    active={filterCustom[f.id]===opt}
+                    onClick={()=>setFilterCustom(fc=>({...fc,[f.id]:fc[f.id]===opt?'all':opt}))}/>
+                ))
+              )}
+            </div>
+          ))}
           <div style={{flex:1}}/>
           <div style={{padding:'10px 8px',borderTop:'1px solid var(--border)'}}>
             <button className="sidebar-item" style={{width:'100%',color:'var(--text3)'}}
