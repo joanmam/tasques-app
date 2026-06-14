@@ -948,7 +948,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.21</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.23</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -1161,7 +1161,7 @@ function App() {
         )}
       </div>
 
-      {showModal&&<NewTaskModal lists={lists}
+      {showModal&&<NewTaskModal lists={lists} defaultFields={defaultFields}
         defaultList={(!DATE_QUICK_VIEWS.includes(selectedList)&&selectedList!=='all'&&selectedList!=='seguiment')?selectedList:lists[0]?.id}
         preFill={voicePreFill}
         onSave={addTask} onClose={()=>{setShowModal(false);setVoicePreFill(null);}}/>}
@@ -1729,7 +1729,7 @@ function DeleteSeriesModal({task,onConfirm,onClose}) {
 }
 
 // ─── NEW TASK MODAL ───────────────────────────────────────────────────────────
-function NewTaskModal({lists,defaultList,onSave,onClose,preFill}) {
+function NewTaskModal({lists,defaultFields,defaultList,onSave,onClose,preFill}) {
   const [form,setForm] = useState({
     title:preFill?.title||'',description:'',startDate:preFill?.endDate||today,
     endDate:preFill?.endDate||'',startTime:'',endTime:preFill?.endTime||'',
@@ -1763,6 +1763,28 @@ function NewTaskModal({lists,defaultList,onSave,onClose,preFill}) {
             {lists.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
           </select>
         </div>
+        {(()=>{
+          const selList = lists.find(l=>l.id===form.listId);
+          const listFields = selList?.fields||[];
+          // Camps per defecte (configurats a "Camps per defecte"): es mostren aquí en files de 3.
+          // Es relacionen amb els camps de la llista per nom+tipus, ja que cada llista té còpies pròpies.
+          const defaultListFields = (defaultFields||[])
+            .map(df=>listFields.find(f=>f.name===df.name&&f.type===df.type))
+            .filter(Boolean);
+          if(!defaultListFields.length) return null;
+          const rows = [];
+          for (let i=0;i<defaultListFields.length;i+=3) rows.push(defaultListFields.slice(i,i+3));
+          return rows.map((row,ri)=>(
+            <div className="input-row" key={ri}>
+              {row.map(f=>(
+                <div style={{flex:1}} key={f.id}>
+                  <label style={{fontSize:10,color:'var(--text3)',display:'block',marginBottom:3}}>{f.name}</label>
+                  <CustomFieldInput field={f} value={form.customValues[f.id]} onChange={v=>set('customValues',{...form.customValues,[f.id]:v})}/>
+                </div>
+              ))}
+            </div>
+          ));
+        })()}
         <div className="input-row">
           <div style={{flex:1}}>
             <label style={{fontSize:10,color:'var(--text3)',display:'block',marginBottom:3}}>Inici</label>
@@ -1819,7 +1841,9 @@ function NewTaskModal({lists,defaultList,onSave,onClose,preFill}) {
         </div>
         {(()=>{
           const selList = lists.find(l=>l.id===form.listId);
-          const customFields = selList?.fields||[];
+          const listFields = selList?.fields||[];
+          // Camps propis d'aquesta llista (no provenen dels "Camps per defecte"): es mostren a part.
+          const customFields = listFields.filter(f=>!(defaultFields||[]).some(df=>df.name===f.name&&df.type===f.type));
           if(!customFields.length) return null;
           return (
             <div className="custom-fields-section">
