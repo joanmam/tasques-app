@@ -144,7 +144,7 @@
     .track-btn svg{width:13px;height:13px}
     .recurrence-chip{font-size:10px;padding:1px 5px;border-radius:8px;background:rgba(79,190,150,.12);color:var(--success);font-weight:500}
     /* detail panel */
-    .detail-panel{width:280px;min-width:280px;border-left:1px solid var(--border);background:var(--sidebar);display:flex;flex-direction:column;overflow-y:auto}
+    .detail-panel{width:340px;min-width:340px;border-left:1px solid var(--border);background:var(--sidebar);display:flex;flex-direction:column;overflow-y:auto}
     .detail-header{padding:13px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
     .detail-header h3{font-size:14px;font-weight:600}
     .detail-body{padding:16px;display:flex;flex-direction:column;gap:12px}
@@ -191,6 +191,7 @@
     .input{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;padding:9px 12px;outline:none}
     .input:focus{border-color:var(--accent)}
     .input-row{display:flex;gap:10px}
+    .input-row>*{min-width:0}
     .field-row{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg2);border-radius:8px;margin-bottom:6px}
     .field-row-name{flex:1;font-size:13px;font-weight:500}
     .field-type-badge{font-size:10px;padding:2px 7px;border-radius:10px;background:var(--bg3);color:var(--text3);font-weight:500}
@@ -962,7 +963,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.25</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.26</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
