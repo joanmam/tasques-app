@@ -963,7 +963,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.26</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.27</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -1025,24 +1025,6 @@ function App() {
               })}
             </div>
           )}
-          {defaultFilterFields.map(f=>(
-            <div className="sidebar-section" key={f.id}>
-              <div className="sidebar-section-title">{f.name}</div>
-              {f.type==='checkbox' ? (
-                ['true','false'].map(val=>(
-                  <SidebarItem key={val} label={val==='true'?'Sí':'No'}
-                    active={filterCustom[f.id]===val}
-                    onClick={()=>setFilterCustom(fc=>({...fc,[f.id]:fc[f.id]===val?'all':val}))}/>
-                ))
-              ) : (
-                (f.options||[]).map(opt=>(
-                  <SidebarItem key={opt} label={opt}
-                    active={filterCustom[f.id]===opt}
-                    onClick={()=>setFilterCustom(fc=>({...fc,[f.id]:fc[f.id]===opt?'all':opt}))}/>
-                ))
-              )}
-            </div>
-          ))}
           <div style={{flex:1}}/>
           <div style={{padding:'10px 8px',borderTop:'1px solid var(--border)'}}>
             <button className="sidebar-item" style={{width:'100%',color:'var(--text3)'}}
@@ -1103,6 +1085,20 @@ function App() {
               <span style={{fontSize:'11px',color:'var(--text3)'}}>Prioritat:</span>
               {[['all','Totes'],['alta','Alta'],['mitjana','Mitjana'],['baixa','Baixa']].map(([v,l])=>(
                 <button key={v} className={`filter-chip ${filterPriority===v?'active':''}`} onClick={()=>setFilterPriority(v)}>{l}</button>
+              ))}
+              {defaultFilterFields.map(f=>(
+                <React.Fragment key={f.id}>
+                  <span className="filter-sep">|</span>
+                  <span style={{fontSize:'11px',color:'var(--text3)'}}>{f.name}:</span>
+                  <button className={`filter-chip ${(filterCustom[f.id]??'all')==='all'?'active':''}`}
+                    onClick={()=>setFilterCustom(fc=>({...fc,[f.id]:'all'}))}>Totes</button>
+                  {(f.type==='checkbox'?['true','false']:(f.options||[])).map(opt=>(
+                    <button key={opt} className={`filter-chip ${filterCustom[f.id]===opt?'active':''}`}
+                      onClick={()=>setFilterCustom(fc=>({...fc,[f.id]:fc[f.id]===opt?'all':opt}))}>
+                      {f.type==='checkbox'?(opt==='true'?'Sí':'No'):opt}
+                    </button>
+                  ))}
+                </React.Fragment>
               ))}
               {customFilterFields.length>0 && (
                 <>
