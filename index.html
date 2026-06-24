@@ -85,9 +85,9 @@
     .sidebar-item.active .sidebar-gear{opacity:.6}
     .add-list-btn{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;cursor:pointer;font-size:13px;color:var(--text3);background:none;border:none;font-family:inherit;width:100%;transition:all .15s}
     .add-list-btn:hover{background:var(--card-hover);color:var(--text)}
-    .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
-    .topbar{padding:13px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:var(--bg);position:relative;z-index:10}
-    .topbar-title{font-size:17px;font-weight:600;flex:1}
+    .main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+    .topbar{padding:13px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:var(--bg);position:relative;z-index:10;overflow:hidden}
+    .topbar-title{font-size:17px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
     .view-toggle{display:flex;gap:2px;background:var(--bg2);border-radius:8px;padding:3px}
     .view-btn{padding:5px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:none;background:transparent;color:var(--text2);font-family:inherit;transition:all .15s;display:flex;align-items:center;gap:5px}
     .view-btn svg{width:13px;height:13px}
@@ -1014,7 +1014,7 @@ function App() {
 
   return (
     <>
-      <div style={{display:'flex',height:'100vh'}}>
+      <div style={{display:'flex',height:'100vh',overflow:'hidden',width:'100%'}}>
         <aside className="sidebar">
           <div className="sidebar-header">
             <span className="sidebar-logo">
@@ -1022,7 +1022,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.33</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.34</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
