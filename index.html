@@ -10,6 +10,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
   <script>
     const firebaseConfig = {
@@ -23,6 +24,9 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const auth = firebase.auth();
+    // Client ID OAuth de Google (Google Cloud Console > Credencials > ID de client OAuth 2.0, tipus "Aplicació web")
+    // Cal habilitar la "Google Calendar API" al projecte i afegir l'origen (URL de l'app) a "Orígens autoritzats de JavaScript"
+    const GOOGLE_CLIENT_ID = "887341396041-6b8uo2dl9u39o5os1gba2llbbvp6i2ss.apps.googleusercontent.com";
   </script>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -64,6 +68,11 @@
     .btn-logout svg{width:13px;height:13px}
     .sidebar-section{padding:10px 8px 4px}
     .sidebar-section-title{font-size:10px;font-weight:600;letter-spacing:.08em;color:var(--text3);text-transform:uppercase;padding:0 8px;margin-bottom:4px}
+    .sidebar-group-label{font-size:10px;font-weight:600;letter-spacing:.06em;color:var(--text3);text-transform:uppercase;padding:8px 10px 2px;opacity:.75}
+    .group-chips{display:flex;flex-wrap:wrap;gap:6px;padding:0 8px 8px}
+    .group-chip{font-size:11px;padding:3px 9px;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;transition:all .15s}
+    .group-chip:hover{color:var(--text2);border-color:var(--text3)}
+    .group-chip.active{background:rgba(79,142,247,.15);color:var(--accent);border-color:var(--accent)}
     .sidebar-item{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;cursor:pointer;font-size:13px;color:var(--text2);transition:all .15s;user-select:none}
     .sidebar-item:hover{background:var(--card-hover);color:var(--text)}
     .sidebar-item.active{background:rgba(79,142,247,.12);color:var(--accent);font-weight:500}
@@ -96,7 +105,22 @@
     .filter-chip:hover{border-color:var(--accent);color:var(--accent)}
     .filter-chip.active{background:rgba(79,142,247,.12);border-color:var(--accent);color:var(--accent)}
     .filter-sep{color:var(--text3);font-size:12px;margin:0 2px}
+    .more-filters{position:relative}
+    .more-filters-panel{position:absolute;top:calc(100% + 6px);left:0;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px;min-width:200px;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.3);display:flex;flex-direction:column;gap:10px}
+    .more-filters-panel label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);display:block;margin-bottom:4px}
     .content{flex:1;overflow-y:auto;padding:14px 24px}
+    /* matrix view */
+    .matrix-view{flex:1;overflow:auto;padding:14px 24px}
+    .matrix-table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
+    .matrix-table th,.matrix-table td{border:1px solid var(--border);padding:8px;vertical-align:top;text-align:left}
+    .matrix-table th{background:var(--bg2);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);position:sticky;top:0;z-index:1;text-align:center}
+    .matrix-table th:first-child,.matrix-table td:first-child{width:160px}
+    .matrix-row-label{display:flex;align-items:center;gap:6px;font-weight:600}
+    .matrix-task-chip{display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px;margin-bottom:4px;cursor:pointer;font-size:12px;transition:filter .12s;border:1px solid transparent}
+    .matrix-task-chip:hover{filter:brightness(1.15)}
+    .matrix-task-chip.selected{border-color:var(--accent)}
+    .matrix-task-chip.completada{opacity:.5;text-decoration:line-through}
+    .matrix-empty-cell{color:var(--text3);font-size:11px;font-style:italic}
     .task-group-title{font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--text3);margin:14px 0 7px}
     .task-item{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:10px;background:var(--card);border:1px solid var(--border);margin-bottom:5px;cursor:pointer;transition:all .15s;animation:fadeIn .15s ease}
     .task-item:hover{border-color:var(--accent);background:var(--card-hover)}
@@ -132,11 +156,12 @@
     .track-btn svg{width:13px;height:13px}
     .recurrence-chip{font-size:10px;padding:1px 5px;border-radius:8px;background:rgba(79,190,150,.12);color:var(--success);font-weight:500}
     /* detail panel */
-    .detail-panel{width:320px;min-width:320px;border-left:1px solid var(--border);background:var(--sidebar);display:flex;flex-direction:column;overflow-y:auto}
+    .detail-panel{width:340px;min-width:340px;border-left:1px solid var(--border);background:var(--sidebar);display:flex;flex-direction:column;overflow-y:auto}
     .detail-header{padding:13px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
     .detail-header h3{font-size:14px;font-weight:600}
     .detail-body{padding:16px;display:flex;flex-direction:column;gap:12px}
     .detail-field label{display:block;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:5px}
+    .detail-field label svg{width:11px;height:11px;vertical-align:-1px;margin-right:3px}
     .detail-title-input{width:100%;background:transparent;border:none;color:var(--text);font-size:15px;font-weight:600;font-family:inherit;outline:none;padding:0}
     .detail-desc{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;padding:9px 11px;resize:vertical;min-height:60px;outline:none}
     .detail-desc:focus{border-color:var(--accent)}
@@ -178,6 +203,7 @@
     .input{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;padding:9px 12px;outline:none}
     .input:focus{border-color:var(--accent)}
     .input-row{display:flex;gap:10px}
+    .input-row>*{min-width:0}
     .field-row{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg2);border-radius:8px;margin-bottom:6px}
     .field-row-name{flex:1;font-size:13px;font-weight:500}
     .field-type-badge{font-size:10px;padding:2px 7px;border-radius:10px;background:var(--bg3);color:var(--text3);font-weight:500}
@@ -206,6 +232,8 @@
     .cal-day.today .cal-day-num{background:var(--accent);color:white}
     .cal-task-chip{font-size:10px;font-weight:500;padding:2px 6px;border-radius:4px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;transition:opacity .1s}
     .cal-task-chip:hover{opacity:.75}
+    .cal-gcal-chip{background:rgba(79,142,247,.12);color:#4f8ef7;cursor:default}
+    .cal-gcal-chip:hover{opacity:1}
     .cal-more{font-size:10px;color:var(--text3);margin-top:2px}
     .cal-day-tasks-popup{position:absolute;top:100%;left:0;z-index:50;min-width:200px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px;box-shadow:0 8px 30px rgba(0,0,0,.15);margin-top:4px}
     .cal-day-tasks-popup h4{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px}
@@ -251,6 +279,8 @@
     @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
     .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 18px;font-size:13px;font-weight:500;box-shadow:0 8px 30px rgba(0,0,0,.2);z-index:200;display:flex;align-items:center;gap:8px;color:var(--text);animation:toastIn .2s ease;white-space:nowrap}
     @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+    @keyframes voicePulse{0%,100%{transform:scale(1)}50%{transform:scale(1.3)}}
+    .voice-active{animation:voicePulse .6s infinite;color:var(--danger)!important}
   </style>
 </head>
 <body>
@@ -259,12 +289,23 @@
 const { useState, useEffect, useRef } = React;
 
 const uid = () => Math.random().toString(36).slice(2,10);
+// Converteix un color hex (#rrggbb) en rgba amb l'opacitat indicada, per a fons difuminats
+const hexToRgba = (hex,alpha=0.15) => {
+  if (!hex) return `rgba(79,142,247,${alpha})`;
+  const h = hex.replace('#','');
+  const r = parseInt(h.length===3?h[0]+h[0]:h.substring(0,2),16);
+  const g = parseInt(h.length===3?h[1]+h[1]:h.substring(2,4),16);
+  const b = parseInt(h.length===3?h[2]+h[2]:h.substring(4,6),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+};
 const TAG_COLORS = [
   {bg:'rgba(79,142,247,.15)',text:'#4f8ef7'},{bg:'rgba(79,190,150,.15)',text:'#4fbe96'},
   {bg:'rgba(247,183,79,.15)',text:'#f7b74f'},{bg:'rgba(247,96,79,.15)',text:'#f7604f'},
   {bg:'rgba(175,79,247,.15)',text:'#af4ff7'},{bg:'rgba(79,215,247,.15)',text:'#4fd7f7'},
 ];
 const LIST_COLORS = ['#4f8ef7','#4fbe96','#f7b74f','#f7604f','#af4ff7','#4fd7f7','#ff8fab','#a8e6cf'];
+// Grups predefinits per organitzar les llistes (es poden ampliar des del modal de llista)
+const LIST_GROUPS = ['Professional','Personal'];
 const FIELD_TYPES = [
   {value:'text',label:'Text'},{value:'number',label:'Número'},
   {value:'select',label:'Desplegable'},{value:'date',label:'Data'},
@@ -288,10 +329,70 @@ const REMINDER_OPTIONS = [
 ];
 const tagColor = t => TAG_COLORS[Math.abs([...t].reduce((a,c)=>a+c.charCodeAt(0),0))%TAG_COLORS.length];
 const fmt = d => d ? new Date(d+'T12:00').toLocaleDateString('ca-ES',{day:'2-digit',month:'short'}) : '';
-const today = new Date().toISOString().split('T')[0];
+// YYYY-MM-DD en hora local (evita el desfasament de toISOString amb fusos horaris)
+const ymd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const today = ymd(new Date());
 const isOverdue = t => t.endDate && t.endDate < today && t.status !== 'completada';
-const tomorrowStr = (() => { const d=new Date(); d.setDate(d.getDate()+1); return d.toISOString().split('T')[0]; })();
-const weekLaterStr = (() => { const d=new Date(); d.setDate(d.getDate()+7); return d.toISOString().split('T')[0]; })();
+const tomorrowStr = (() => { const d=new Date(); d.setDate(d.getDate()+1); return ymd(d); })();
+const threeDayLaterStr = (() => { const d=new Date(); d.setDate(d.getDate()+3); return ymd(d); })();
+const weekLaterStr = (() => { const d=new Date(); d.setDate(d.getDate()+7); return ymd(d); })();
+// Data "representativa" d'una tasca per filtres ràpids (Avui/Demà/Pròxims dies):
+// per ocurrències de sèries repetides és la pròpia ocurrència (endDate); per la resta, endDate o startDate.
+const taskDueStr = t => t.seriesId ? t.endDate : (t.endDate || t.startDate || '');
+// Vistes ràpides per data, mostrades a la barra lateral sota "Avui"
+const DATE_QUICK_VIEWS = ['today','tomorrow','next3','next7'];
+// ─── GOOGLE CALENDAR ────────────────────────────────────────────────────────
+const GCAL_TOKEN_KEY = 'tq_gcal_token';
+const GCAL_EXPIRY_KEY = 'tq_gcal_token_expiry';
+const loadGcalToken = () => {
+  const tok = localStorage.getItem(GCAL_TOKEN_KEY);
+  const exp = +localStorage.getItem(GCAL_EXPIRY_KEY)||0;
+  if (tok && Date.now()<exp) return tok;
+  return null;
+};
+const saveGcalToken = (token,expiresInSec) => {
+  localStorage.setItem(GCAL_TOKEN_KEY,token);
+  localStorage.setItem(GCAL_EXPIRY_KEY, String(Date.now()+expiresInSec*1000));
+};
+const clearGcalToken = () => { localStorage.removeItem(GCAL_TOKEN_KEY); localStorage.removeItem(GCAL_EXPIRY_KEY); };
+// Converteix un esdeveniment de l'API de Google Calendar a {dateStr, title, allDay, time}
+const gcalEventToDays = (ev, cal) => {
+  const days = [];
+  const startStr = ev.start?.date || (ev.start?.dateTime||'').slice(0,10);
+  const endStr   = ev.end?.date   || (ev.end?.dateTime||'').slice(0,10);
+  if (!startStr) return days;
+  const allDay = !!ev.start?.date;
+  // Esdeveniments de tot el dia: l'end de Google és exclusiu
+  let cur = new Date(startStr+'T00:00');
+  const end = new Date((endStr||startStr)+'T00:00');
+  if (allDay && end>cur) end.setDate(end.getDate()-1);
+  let safety=0;
+  while (cur<=end && safety<60) {
+    days.push(ymd(cur));
+    cur.setDate(cur.getDate()+1);
+    safety++;
+  }
+  if (days.length===0) days.push(startStr);
+  return days.map(dateStr=>({
+    dateStr, title:ev.summary||'(sense títol)', allDay,
+    time: allDay?'':(ev.start?.dateTime||'').slice(11,16),
+    link: ev.htmlLink,
+    color: cal?.color||'#4f8ef7', calLabel: cal?.label||'Google Calendar'
+  }));
+};
+const fetchGcalEvents = async (token, calendarId, timeMinStr, timeMaxStr, cal) => {
+  const params = new URLSearchParams({
+    timeMin: new Date(timeMinStr+'T00:00:00').toISOString(),
+    timeMax: new Date(timeMaxStr+'T23:59:59').toISOString(),
+    singleEvents:'true', orderBy:'startTime', maxResults:'250'
+  });
+  const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params}`,{
+    headers:{Authorization:`Bearer ${token}`}
+  });
+  if (!res.ok) { if(res.status===401) clearGcalToken(); throw new Error('gcal-fetch-failed'); }
+  const data = await res.json();
+  return (data.items||[]).filter(ev=>ev.status!=='cancelled').flatMap(ev=>gcalEventToDays(ev, cal));
+};
 const dateCategory = t => {
   if (!t.endDate) return 'nodate';
   if (t.endDate < today) return 'overdue';
@@ -308,6 +409,17 @@ const DATE_GROUPS = [
   { key:'later',    label:'Més endavant',   dot:'var(--text3)',   cls:'date-later'    },
   { key:'nodate',   label:'Sense data',     dot:'var(--border)',  cls:'date-later'    },
 ];
+// Per a les vistes ràpides "Pròxims 3/7 dies": agrupa cada dia per separat
+// (Avui / Demà / nom del dia) en lloc de fer servir les categories genèriques de DATE_GROUPS.
+const dayGroupLabel = dateStr => {
+  if (dateStr===today) return 'Avui';
+  if (dateStr===tomorrowStr) return 'Demà';
+  if (!dateStr) return 'Sense data';
+  const d = new Date(dateStr+'T12:00');
+  const label = d.toLocaleDateString('ca-ES',{weekday:'long',day:'numeric',month:'long'});
+  return label.charAt(0).toUpperCase()+label.slice(1);
+};
+const dayGroupDot = dateStr => dateStr===today?'var(--warn)':dateStr===tomorrowStr?'var(--accent)':!dateStr?'var(--border)':'var(--text2)';
 const save = (k,v) => { try{localStorage.setItem(k,JSON.stringify(v))}catch{} };
 const load = (k,d) => { try{return JSON.parse(localStorage.getItem(k))??d}catch{return d} };
 
@@ -322,7 +434,7 @@ const nextOccurrence = (dateStr, recurrence) => {
       break;
     default: return null;
   }
-  return d.toISOString().split('T')[0];
+  return ymd(d);
 };
 
 const Ic = {
@@ -427,39 +539,110 @@ function App() {
   const [toast,setToast]             = useState('');
   const showToast = msg => { setToast(msg); setTimeout(()=>setToast(''),3000); };
   const [selectedList,setSelectedList]   = useState('all');
+  const [selectedGroup,setSelectedGroup] = useState('all');
   const [selectedTask,setSelectedTask]   = useState(null);
   const [filterStatus,setFilterStatus]   = useState('all');
   const [filterPriority,setFilterPriority] = useState('all');
   const [filterTag,setFilterTag]         = useState('all');
+  const [filterCustom,setFilterCustom]   = useState({});
+  const [showMoreFilters,setShowMoreFilters] = useState(false);
+  const [gcalToken,setGcalToken]         = useState(loadGcalToken());
+  const [gcalEvents,setGcalEvents]       = useState([]);
+  const [gcalError,setGcalError]         = useState('');
+  const connectGoogleCalendar = () => {
+    if (!GOOGLE_CLIENT_ID) { showToast("Falta configurar GOOGLE_CLIENT_ID a l'app"); return; }
+    if (!window.google?.accounts?.oauth2) { showToast('Google encara no s\'ha carregat, prova de nou'); return; }
+    const tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: 'https://www.googleapis.com/auth/calendar.readonly',
+      callback: resp => {
+        if (resp?.access_token) {
+          saveGcalToken(resp.access_token, resp.expires_in||3600);
+          setGcalToken(resp.access_token);
+          setGcalError('');
+        }
+      }
+    });
+    tokenClient.requestAccessToken();
+  };
+  const disconnectGoogleCalendar = () => {
+    clearGcalToken(); setGcalToken(null); setGcalEvents([]); setGcalError('');
+  };
+  const [gcalCalendars,setGcalCalendars] = useState([
+    {id:'primary',label:'Principal',color:'#4f8ef7'},
+    {id:'family01692891853073540554@group.calendar.google.com',label:'Familiar',color:'#4fbe96'}
+  ]);
+  const [showGcalSettings,setShowGcalSettings] = useState(false);
+  const saveGcalCalendars = async cals => {
+    setGcalCalendars(cals);
+    if (user?.uid) await db.collection('userSettings').doc(user.uid).set({gcalCalendars:cals},{merge:true});
+  };
   const [showModal,setShowModal]         = useState(false);
+  const [voiceListening,setVoiceListening] = useState(false);
+  const [voicePreFill,setVoicePreFill]   = useState(null);
   const [showListModal,setShowListModal] = useState(false);
   const [editingList,setEditingList]     = useState(null);
   const [showDefaultFields,setShowDefaultFields] = useState(false);
+  const [deleteConfirm,setDeleteConfirm]   = useState(null);
   const [darkMode,setDarkMode]           = useState(()=>load('tq_dark',false));
   const [view,setView]                   = useState('list');
 
-  useEffect(()=>auth.onAuthStateChanged(u=>setUser(u??null)),[]);
+  useEffect(()=>auth.onAuthStateChanged(u=>{
+    setUser(u??null);
+    if(u) db.collection('users').doc(u.uid).set({email:u.email},{merge:true});
+  }),[]);
+  useEffect(()=>{setFilterCustom({});setShowMoreFilters(false);},[selectedList]);
+  const moreFiltersRef = useRef(null);
+  useEffect(()=>{
+    if (!showMoreFilters) return;
+    const h = e => {if(moreFiltersRef.current&&!moreFiltersRef.current.contains(e.target))setShowMoreFilters(false);};
+    document.addEventListener('mousedown',h);
+    return ()=>document.removeEventListener('mousedown',h);
+  },[showMoreFilters]);
 
   useEffect(()=>{
     if (!user) return;
-    const oneYearAgo = new Date(); oneYearAgo.setFullYear(oneYearAgo.getFullYear()-1);
-    const yearAgoStr = oneYearAgo.toISOString().split('T')[0];
-    const unsubT = db.collection('tasks').where('ownerId','==',user.uid)
+    const _ownTasks=[],_sharedTasks=[],_ownLists=[],_sharedLists=[];
+    let sharedTasksUnsub=()=>{};
+    const sortTasks=arr=>arr.slice().sort((a,b)=>(b.createdAt?.toMillis?.()??0)-(a.createdAt?.toMillis?.()??0));
+    const sortLists=arr=>arr.slice().sort((a,b)=>(a.createdAt?.toMillis?.()??0)-(b.createdAt?.toMillis?.()??0));
+    const dedup=arr=>{const s=new Set();return arr.filter(x=>!s.has(x.id)&&s.add(x.id));};
+    const mergeTasks=()=>setTasks(sortTasks(dedup([..._ownTasks,..._sharedTasks])));
+    const mergeLists=()=>setLists(sortLists(dedup([..._ownLists,..._sharedLists])));
+    const unsubT=db.collection('tasks').where('ownerId','==',user.uid)
       .onSnapshot(snap=>{
-        setTasks(snap.docs.map(d=>({id:d.id,...d.data()}))
-          .sort((a,b)=>(b.createdAt?.toMillis?.()??0)-(a.createdAt?.toMillis?.()??0)));
+        _ownTasks.length=0;snap.docs.forEach(d=>_ownTasks.push({id:d.id,...d.data()}));
+        mergeTasks();
       });
-    const unsubL = db.collection('lists').where('ownerId','==',user.uid)
+    const unsubL1=db.collection('lists').where('ownerId','==',user.uid)
       .onSnapshot(snap=>{
-        setLists(snap.docs.map(d=>({id:d.id,...d.data()}))
-          .sort((a,b)=>(a.createdAt?.toMillis?.()??0)-(b.createdAt?.toMillis?.()??0)));
+        _ownLists.length=0;snap.docs.forEach(d=>_ownLists.push({id:d.id,...d.data()}));
+        mergeLists();
       });
-    const unsubS = db.collection('userSettings').doc(user.uid)
-      .onSnapshot(snap=>{ if(snap.exists) setDefaultFields(snap.data().defaultFields||[]); });
-    const unsubCL = db.collection('completionLogs')
-      .where('ownerId','==',user.uid)
-      .onSnapshot(snap=>{ setCompletionLogs(snap.docs.map(d=>({id:d.id,...d.data()}))); });
-    return ()=>{unsubT();unsubL();unsubS();unsubCL();};
+    const unsubL2=db.collection('lists').where('sharedWith','array-contains',user.uid)
+      .onSnapshot(snap=>{
+        _sharedLists.length=0;snap.docs.forEach(d=>_sharedLists.push({id:d.id,...d.data()}));
+        mergeLists();
+        sharedTasksUnsub();
+        const sharedIds=_sharedLists.map(l=>l.id);
+        if(!sharedIds.length){_sharedTasks.length=0;mergeTasks();sharedTasksUnsub=()=>{};return;}
+        sharedTasksUnsub=db.collection('tasks').where('listId','in',sharedIds)
+          .onSnapshot(snap=>{
+            _sharedTasks.length=0;snap.docs.forEach(d=>_sharedTasks.push({id:d.id,...d.data()}));
+            mergeTasks();
+          });
+      });
+    const unsubS=db.collection('userSettings').doc(user.uid)
+      .onSnapshot(snap=>{
+        if(snap.exists){
+          setDefaultFields(snap.data().defaultFields||[]);
+          const cals=snap.data().gcalCalendars;
+          if(cals&&cals.length)setGcalCalendars(cals);
+        }
+      });
+    const unsubCL=db.collection('completionLogs').where('ownerId','==',user.uid)
+      .onSnapshot(snap=>{setCompletionLogs(snap.docs.map(d=>({id:d.id,...d.data()})));});
+    return()=>{unsubT();unsubL1();unsubL2();unsubS();unsubCL();sharedTasksUnsub();};
   },[user]);
 
   useEffect(()=>{
@@ -524,6 +707,83 @@ function App() {
   if (user===undefined) return <div className="loading-screen"><div className="spinner"/><span style={{fontSize:13,color:'var(--text3)'}}>Carregant...</span></div>;
   if (!user) return <LoginScreen/>;
 
+  // ── Parser de veu en català ──────────────────────────────────────────────
+  const parseVoiceInput = (text) => {
+    let title = text;
+    const lower = text.toLowerCase();
+    let endDate = '', endTime = '';
+    const now = new Date();
+    const addDays = n => { const d=new Date(now); d.setDate(d.getDate()+n); return ymd(d); };
+    const dayNames = ['diumenge','dilluns','dimarts','dimecres','dijous','divendres','dissabte'];
+    const dayNamesEs = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+    const monthNames = ['gener','febrer','març','abril','maig','juny','juliol','agost','setembre','octubre','novembre','desembre'];
+    const monthNamesEs = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    // Hora (català + castellà)
+    const timeRules = [
+      [/a les (\d{1,2})[h:](\d{2})/, m=>`${m[1].padStart(2,'0')}:${m[2]}`],
+      [/a las (\d{1,2})[h:](\d{2})/, m=>`${m[1].padStart(2,'0')}:${m[2]}`],
+      [/a les (\d{1,2})h/,           m=>`${m[1].padStart(2,'0')}:00`],
+      [/a las (\d{1,2})h/,           m=>`${m[1].padStart(2,'0')}:00`],
+      [/a les (\d{1,2})/,            m=>`${m[1].padStart(2,'0')}:00`],
+      [/a las (\d{1,2})/,            m=>`${m[1].padStart(2,'0')}:00`],
+      [/al mat[íi]|por la mañana/,   ()=>'09:00'],
+      [/a migdia|a mediodía/,        ()=>'12:00'],
+      [/a la tarda|por la tarde/,    ()=>'15:00'],
+      [/al vespre|al atardecer/,     ()=>'19:00'],
+      [/a la nit|por la noche/,      ()=>'21:00'],
+    ];
+    for (const [re,fn] of timeRules) {
+      const m = lower.match(re);
+      if (m) { endTime=fn(m); title=title.replace(new RegExp(re.source,'i'),''); break; }
+    }
+    // Data (català + castellà)
+    const allDays = [...dayNames,...dayNamesEs];
+    const dateRules = [
+      [/\bavui\b|\bhoy\b/,                ()=>addDays(0)],
+      [/\bdem[àa] passat\b|\bpasado mañana\b/, ()=>addDays(2)],
+      [/\bdem[àa](?![a-zà-ÿ])|\bmañana\b/, ()=>addDays(1)],
+      [/la setmana que ve|la semana que viene|la próxima semana/, ()=>addDays(7)],
+      [new RegExp(`(?:el proper |el |el próximo )?(${allDays.join('|')})`), m=>{
+        const raw=m[1]; const di=dayNames.indexOf(raw)!==-1?dayNames.indexOf(raw):dayNamesEs.indexOf(raw);
+        const diff=(di-now.getDay()+7)%7||7; return addDays(diff);
+      }],
+      [/el (\d{1,2}) de ([a-zà-ÿ]+)/, m=>{
+        const mi=monthNames.indexOf(m[2])!==-1?monthNames.indexOf(m[2]):monthNamesEs.indexOf(m[2]);
+        if(mi===-1) return null;
+        const d=new Date(now.getFullYear(),mi,parseInt(m[1]));
+        if(d<now) d.setFullYear(d.getFullYear()+1);
+        return ymd(d);
+      }],
+    ];
+    for (const [re,fn] of dateRules) {
+      const m = lower.match(re);
+      if (m) { const r=fn(m); if(r){endDate=r; title=title.replace(new RegExp(re.source,'i'),'');} break; }
+    }
+    title = title.replace(/\s+/g,' ').replace(/^[\s,]+|[\s,]+$/g,'').trim();
+    title = title.charAt(0).toUpperCase()+title.slice(1);
+    return {title, endDate, endTime};
+  };
+
+  const startVoice = () => {
+    const SR = window.SpeechRecognition||window.webkitSpeechRecognition;
+    if (!SR) { showToast('⚠ El navegador no suporta reconeixement de veu'); return; }
+    const rec = new SR();
+    rec.lang = 'ca-ES';
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    setVoiceListening(true);
+    rec.onresult = e => {
+      setVoiceListening(false);
+      const transcript = e.results[0][0].transcript;
+      const parsed = parseVoiceInput(transcript);
+      setVoicePreFill(parsed);
+      setShowModal(true);
+    };
+    rec.onerror = () => { setVoiceListening(false); showToast('⚠ Error de reconeixement'); };
+    rec.onend   = () => setVoiceListening(false);
+    rec.start();
+  };
+
   const addTask = async data => {
     setSyncing(true);
     if (data.recurrence && data.recurrence !== 'none') {
@@ -536,7 +796,7 @@ function App() {
       } else {
         limitDt.setFullYear(limitDt.getFullYear() + 1); // màxim 1 any
       }
-      const limitStr = data.recurrenceEndDate || limitDt.toISOString().split('T')[0];
+      const limitStr = data.recurrenceEndDate || ymd(limitDt);
       // Genera les dates
       const dates = [];
       let cur = seriesStart;
@@ -575,6 +835,28 @@ function App() {
     await db.collection('tasks').doc(id).delete();
     if (selectedTask?.id===id) setSelectedTask(null);
   };
+  const requestDelete = task => {
+    if (task.seriesId) setDeleteConfirm(task);
+    else deleteTask(task.id);
+  };
+  const deleteSeries = async (task,mode) => {
+    setSyncing(true);
+    if (mode==='this') {
+      await deleteTask(task.id);
+    } else {
+      const snap = await db.collection('tasks').where('seriesId','==',task.seriesId).get();
+      const batch = db.batch();
+      snap.docs.forEach(d=>{
+        const data=d.data();
+        if (mode==='all' || (mode==='future' && (data.endDate||'')>=(task.endDate||''))) {
+          batch.delete(d.ref);
+        }
+      });
+      await batch.commit();
+      if (selectedTask?.seriesId===task.seriesId) setSelectedTask(null);
+    }
+    setSyncing(false); setDeleteConfirm(null);
+  };
   const toggleStatus = async (id,current) => {
     const task = tasks.find(t=>t.id===id); if (!task) return;
     if (current!=='completada') {
@@ -599,13 +881,13 @@ function App() {
       const dt = new Date(`${base}T${baseTime}`);
       dt.setHours(dt.getHours()+1);
       await db.collection('tasks').doc(task.id).update({
-        endDate: dt.toISOString().split('T')[0],
+        endDate: ymd(dt),
         endTime: dt.toTimeString().slice(0,5)
       });
     } else {
       const dt = new Date(base+'T12:00');
       dt.setDate(dt.getDate()+1);
-      await db.collection('tasks').doc(task.id).update({endDate:dt.toISOString().split('T')[0]});
+      await db.collection('tasks').doc(task.id).update({endDate:ymd(dt)});
     }
   };
   const toggleTrack = async task => {
@@ -621,8 +903,9 @@ function App() {
     }
   };
   const addList = async data => {
-    const fields = defaultFields.map(f=>({...f,id:uid()}));
-    await db.collection('lists').add({...data,fields,ownerId:user.uid,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+    // Els "Camps per defecte" són globals i no cal copiar-los a cada llista;
+    // les llistes noves comencen sense camps propis (es poden afegir des de la configuració de la llista).
+    await db.collection('lists').add({...data,fields:[],sharedWith:[],sharedWithEmails:{},ownerId:user.uid,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
     setShowListModal(false);
   };
   const updateList = async (id,data) => {
@@ -639,23 +922,92 @@ function App() {
     await db.collection('userSettings').doc(user.uid).set({defaultFields:fields},{merge:true});
     setShowDefaultFields(false);
   };
+  const shareList = async (listId, email) => {
+    email = email.trim().toLowerCase();
+    const snap = await db.collection('users').where('email','==',email).get();
+    if (snap.empty) return 'No existeix cap usuari registrat amb aquest correu.';
+    const targetUid = snap.docs[0].id;
+    if (targetUid===user.uid) return 'No et pots compartir la llista a tu mateix.';
+    const updates = {sharedWith: firebase.firestore.FieldValue.arrayUnion(targetUid)};
+    updates[`sharedWithEmails.${targetUid}`] = email;
+    await db.collection('lists').doc(listId).update(updates);
+    showToast('✓ Llista compartida amb '+email);
+    return null;
+  };
+  const unshareList = async (listId, targetUid) => {
+    const updates = {sharedWith: firebase.firestore.FieldValue.arrayRemove(targetUid)};
+    updates[`sharedWithEmails.${targetUid}`] = firebase.firestore.FieldValue.delete();
+    await db.collection('lists').doc(listId).update(updates);
+  };
 
   const allTags = [...new Set(tasks.flatMap(t=>t.tags||[]))];
+  // Camps personalitzats de la llista seleccionada que es poden filtrar (select/checkbox)
+  const isSpecificList = !DATE_QUICK_VIEWS.includes(selectedList)&&selectedList!=='all'&&selectedList!=='seguiment';
+  const customFilterFields = isSpecificList
+    ? (lists.find(l=>l.id===selectedList)?.fields||[]).filter(f=>f.type==='select'||f.type==='checkbox')
+    : [];
+  // Camps per defecte filtrables (select/checkbox), aplicables a totes les vistes des de la barra lateral
+  const defaultFilterFields = (defaultFields||[]).filter(f=>f.type==='select'||f.type==='checkbox');
+  // Grups de llistes (Professional/Personal/...) per organitzar la barra lateral i filtrar
+  const listGroupOf = listId => lists.find(l=>l.id===listId)?.group || 'Sense grup';
+  const presentGroups = [...new Set(lists.map(l=>l.group||'Sense grup'))];
+  const orderedGroups = [...LIST_GROUPS.filter(g=>presentGroups.includes(g)), ...presentGroups.filter(g=>!LIST_GROUPS.includes(g))];
+  // El filtre de grup només s'aplica a vistes generals (Totes, Avui, Demà...), no quan ja s'ha triat una llista concreta
+  const matchesGroup = t => isSpecificList || selectedGroup==='all' || listGroupOf(t.listId)===selectedGroup;
   const filtered = tasks.filter(t=>{
-    if (selectedList==='today'){if(t.startDate!==today&&t.endDate!==today)return false;}
+    if (selectedList==='today'){
+      // Per a ocurrències de tasques repetides, només compta la data de l'ocurrència (endDate),
+      // ja que totes comparteixen la mateixa startDate original.
+      if (t.seriesId) { if (t.endDate!==today) return false; }
+      else if (t.startDate!==today&&t.endDate!==today) return false;
+    }
+    else if (selectedList==='tomorrow'){ if (taskDueStr(t)!==tomorrowStr) return false; }
+    else if (selectedList==='next3'){ const d=taskDueStr(t); if(!d||d<today||d>threeDayLaterStr) return false; }
+    else if (selectedList==='next7'){ const d=taskDueStr(t); if(!d||d<today||d>weekLaterStr) return false; }
     else if (selectedList!=='all'&&selectedList!=='seguiment'){if(t.listId!==selectedList)return false;}
+    if (!matchesGroup(t)) return false;
     if (filterStatus!=='all'&&t.status!==filterStatus) return false;
     if (filterPriority!=='all'&&t.priority!==filterPriority) return false;
     if (filterTag!=='all'&&!(t.tags||[]).includes(filterTag)) return false;
+    for (const f of customFilterFields) {
+      const fv = filterCustom[f.id];
+      if (fv===undefined||fv==='all') continue;
+      const cv = (t.customValues||{})[f.id];
+      if (f.type==='checkbox') {
+        if (String(!!cv)!==fv) return false;
+      } else {
+        if ((cv??'')!==fv) return false;
+      }
+    }
+    // Filtres pels "camps per defecte" (s'apliquen a totes les vistes, des de la barra lateral)
+    for (const f of defaultFilterFields) {
+      const fv = filterCustom[f.id];
+      if (fv===undefined||fv==='all') continue;
+      const cv = (t.customValues||{})[f.id];
+      if (f.type==='checkbox') {
+        if (String(!!cv)!==fv) return false;
+      } else {
+        if ((cv??'')!==fv) return false;
+      }
+    }
     return true;
   });
   const pendents    = filtered.filter(t=>t.status!=='completada');
   const completades = filtered.filter(t=>t.status==='completada');
-  const countFor = id => tasks.filter(t=>id==='today'
-    ?(t.startDate===today||t.endDate===today)&&t.status!=='completada'
-    :t.listId===id&&t.status!=='completada').length;
+  const countFor = id => tasks.filter(t=>{
+    if (t.status==='completada') return false;
+    if (!matchesGroup(t)) return false;
+    if (id==='today') return t.seriesId?t.endDate===today:(t.startDate===today||t.endDate===today);
+    if (id==='tomorrow') return taskDueStr(t)===tomorrowStr;
+    if (id==='next3') { const d=taskDueStr(t); return d&&d>=today&&d<=threeDayLaterStr; }
+    if (id==='next7') { const d=taskDueStr(t); return d&&d>=today&&d<=weekLaterStr; }
+    return t.listId===id;
+  }).length;
   const listName = selectedList==='all'?'Totes les tasques'
     :selectedList==='today'?'Avui'
+    :selectedList==='tomorrow'?'Demà'
+    :selectedList==='next3'?'Pròxims 3 dies'
+    :selectedList==='next7'?'Pròxims 7 dies'
     :selectedList==='seguiment'?'Seguiment'
     :lists.find(l=>l.id===selectedList)?.name??'';
 
@@ -669,7 +1021,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.1</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.30</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -688,15 +1040,39 @@ function App() {
               active={selectedList==='all'} onClick={()=>setSelectedList('all')}/>
             <SidebarItem icon={Ic.today} label="Avui" count={countFor('today')}
               active={selectedList==='today'} onClick={()=>setSelectedList('today')}/>
+            <SidebarItem icon={Ic.calendar} label="Demà" count={countFor('tomorrow')}
+              active={selectedList==='tomorrow'} onClick={()=>setSelectedList('tomorrow')}/>
+            <SidebarItem icon={Ic.calendar} label="Pròxims 3 dies" count={countFor('next3')}
+              active={selectedList==='next3'} onClick={()=>setSelectedList('next3')}/>
+            <SidebarItem icon={Ic.calendar} label="Pròxims 7 dies" count={countFor('next7')}
+              active={selectedList==='next7'} onClick={()=>setSelectedList('next7')}/>
             <SidebarItem icon={Ic.chart} label="Seguiment"
               active={selectedList==='seguiment'} onClick={()=>setSelectedList('seguiment')}/>
           </div>
           <div className="sidebar-section">
             <div className="sidebar-section-title">Llistes</div>
-            {lists.map(l=>(
-              <SidebarItem key={l.id} dot={l.color} label={l.name} count={countFor(l.id)}
-                active={selectedList===l.id} onClick={()=>setSelectedList(l.id)}
-                onSettings={()=>setEditingList(l)} onDelete={()=>deleteList(l.id)}/>
+            {orderedGroups.length>1 && (
+              <div className="group-chips">
+                <button className={`group-chip ${selectedGroup==='all'?'active':''}`} onClick={()=>setSelectedGroup('all')}>Tots</button>
+                {orderedGroups.map(g=>(
+                  <button key={g} className={`group-chip ${selectedGroup===g?'active':''}`} onClick={()=>setSelectedGroup(g===selectedGroup?'all':g)}>{g}</button>
+                ))}
+              </div>
+            )}
+            {orderedGroups.filter(g=>selectedGroup==='all'||selectedGroup===g).map(g=>(
+              <div key={g}>
+                {orderedGroups.length>1 && <div className="sidebar-group-label">{g}</div>}
+                {lists.filter(l=>(l.group||'Sense grup')===g).map(l=>{
+                  const isOwner=l.ownerId===user.uid;
+                  const hasShares=isOwner&&(l.sharedWith||[]).length>0;
+                  return (
+                    <SidebarItem key={l.id} dot={l.color} label={l.name} count={countFor(l.id)}
+                      sharedIcon={!isOwner?'recv':hasShares?'sent':null}
+                      active={selectedList===l.id} onClick={()=>setSelectedList(l.id)}
+                      onSettings={()=>setEditingList(l)} onDelete={isOwner?()=>deleteList(l.id):null}/>
+                  );
+                })}
+              </div>
             ))}
             <button className="add-list-btn" onClick={()=>setShowListModal(true)}>
               <span style={{fontSize:16}}>+</span> Nova llista
@@ -719,6 +1095,20 @@ function App() {
               <span style={{width:14,height:14}}>{Ic.gear}</span>
               <span style={{fontSize:12}}>Camps per defecte</span>
             </button>
+            <button className="sidebar-item" style={{width:'100%',color:gcalToken?'var(--success)':'var(--text3)'}}
+              onClick={gcalToken?disconnectGoogleCalendar:connectGoogleCalendar}
+              title={gcalToken?'Desconnectar Google Calendar':'Mostra el teu Google Calendar al calendari'}>
+              <span style={{width:14,height:14}}>{Ic.calendar}</span>
+              <span style={{fontSize:12}}>{gcalToken?'Google Calendar connectat':'Connectar Google Calendar'}</span>
+            </button>
+            {gcalToken && (
+              <button className="sidebar-item" style={{width:'100%',color:'var(--text3)'}}
+                onClick={()=>setShowGcalSettings(true)}
+                title="Configurar calendaris de Google a mostrar">
+                <span style={{width:14,height:14}}>{Ic.gear}</span>
+                <span style={{fontSize:12}}>Calendaris de Google</span>
+              </button>
+            )}
             <div style={{padding:'8px 10px',fontSize:'10px',color:'var(--text3)'}}>
               <span className="kbd">n</span> nova &nbsp;·&nbsp; <span className="kbd">espai</span> completar
             </div>
@@ -736,14 +1126,22 @@ function App() {
                 <button className={`view-btn ${view==='calendar'?'active':''}`} onClick={()=>setView('calendar')}>
                   <span style={{width:13,height:13}}>{Ic.calendar}</span> Calendari
                 </button>
+                <button className={`view-btn ${view==='matrix'?'active':''}`} onClick={()=>setView('matrix')}>
+                  <span style={{width:13,height:13}}>{Ic.chart}</span> Matriu
+                </button>
               </div>
-              <button className="btn btn-primary" onClick={()=>setShowModal(true)}>{Ic.plus} Nova tasca</button>
+              <button className={`btn btn-ghost btn-icon ${voiceListening?'voice-active':''}`}
+                onClick={startVoice} title="Nova tasca per veu"
+                style={{color:voiceListening?'var(--danger)':'var(--text2)',fontSize:18,padding:'6px 10px'}}>
+                🎤
+              </button>
+              <button className="btn btn-primary" onClick={()=>{setVoicePreFill(null);setShowModal(true);}}>{Ic.plus} Nova tasca</button>
             </>}
           </div>
 
           {selectedList==='seguiment' ? (
             <SeguimentView tasks={tasks} completionLogs={completionLogs} lists={lists}/>
-          ) : view==='list' ? (<>
+          ) : (<>
             <div className="filters">
               <span style={{fontSize:'11px',color:'var(--text3)'}}>Estat:</span>
               {[['all','Totes'],['pendent','Pendent'],['en-curs','En curs'],['completada','Completada']].map(([v,l])=>(
@@ -754,13 +1152,76 @@ function App() {
               {[['all','Totes'],['alta','Alta'],['mitjana','Mitjana'],['baixa','Baixa']].map(([v,l])=>(
                 <button key={v} className={`filter-chip ${filterPriority===v?'active':''}`} onClick={()=>setFilterPriority(v)}>{l}</button>
               ))}
+              {defaultFilterFields.map(f=>(
+                <React.Fragment key={f.id}>
+                  <span className="filter-sep">|</span>
+                  <span style={{fontSize:'11px',color:'var(--text3)'}}>{f.name}:</span>
+                  <button className={`filter-chip ${(filterCustom[f.id]??'all')==='all'?'active':''}`}
+                    onClick={()=>setFilterCustom(fc=>({...fc,[f.id]:'all'}))}>Totes</button>
+                  {(f.type==='checkbox'?['true','false']:(f.options||[])).map(opt=>(
+                    <button key={opt} className={`filter-chip ${filterCustom[f.id]===opt?'active':''}`}
+                      onClick={()=>setFilterCustom(fc=>({...fc,[f.id]:fc[f.id]===opt?'all':opt}))}>
+                      {f.type==='checkbox'?(opt==='true'?'Sí':'No'):opt}
+                    </button>
+                  ))}
+                </React.Fragment>
+              ))}
+              {customFilterFields.length>0 && (
+                <>
+                  <span className="filter-sep">|</span>
+                  <div className="more-filters" ref={moreFiltersRef}>
+                    <button className={`filter-chip ${Object.values(filterCustom).some(v=>v&&v!=='all')?'active':''}`}
+                      onClick={()=>setShowMoreFilters(s=>!s)}>
+                      Més filtres {Object.values(filterCustom).filter(v=>v&&v!=='all').length>0?`(${Object.values(filterCustom).filter(v=>v&&v!=='all').length})`:'▾'}
+                    </button>
+                    {showMoreFilters && (
+                      <div className="more-filters-panel">
+                        {customFilterFields.map(f=>(
+                          <div key={f.id}>
+                            <label>{f.name}</label>
+                            {f.type==='checkbox' ? (
+                              <select className="input" value={filterCustom[f.id]??'all'} onChange={e=>setFilterCustom(fc=>({...fc,[f.id]:e.target.value}))}>
+                                <option value="all">Tots</option>
+                                <option value="true">Sí</option>
+                                <option value="false">No</option>
+                              </select>
+                            ) : (
+                              <select className="input" value={filterCustom[f.id]??'all'} onChange={e=>setFilterCustom(fc=>({...fc,[f.id]:e.target.value}))}>
+                                <option value="all">Tots</option>
+                                {(f.options||[]).map(o=><option key={o} value={o}>{o}</option>)}
+                              </select>
+                            )}
+                          </div>
+                        ))}
+                        {Object.values(filterCustom).some(v=>v&&v!=='all') && (
+                          <button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px'}} onClick={()=>setFilterCustom({})}>Netejar</button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
+            {view==='calendar' ? (
+              <CalendarView tasks={filtered} lists={lists} selectedTask={selectedTask} onSelectTask={setSelectedTask}
+                gcalToken={gcalToken} gcalEvents={gcalEvents} setGcalEvents={setGcalEvents} gcalError={gcalError} setGcalError={setGcalError} gcalCalendars={gcalCalendars}/>
+            ) : view==='matrix' ? (
+              <MatrixView tasks={filtered} lists={lists} defaultFields={defaultFields} selectedTask={selectedTask} onSelectTask={setSelectedTask}/>
+            ) : (
             <div className="content">
               {pendents.length===0&&completades.length===0&&(
                 <div className="empty-state">{Ic.list}<p>Cap tasca. Crea-ne una amb <span className="kbd">n</span></p></div>
               )}
-              {DATE_GROUPS.map(grp=>{
-                const grpTasks = pendents.filter(t=>dateCategory(t)===grp.key);
+              {(selectedList==='next3'||selectedList==='next7'?
+                // Agrupa per dia concret (Avui / Demà / nom del dia), evitant l'etiqueta confusa "Pròxims 7 dies"
+                [...new Set(pendents.map(t=>taskDueStr(t)))].sort()
+                  .map(d=>({key:d||'nodate',label:dayGroupLabel(d),dot:dayGroupDot(d),
+                    tasks:pendents.filter(t=>taskDueStr(t)===d)}))
+                :
+                DATE_GROUPS.map(grp=>({key:grp.key,label:grp.label,dot:grp.dot,
+                  tasks:pendents.filter(t=>dateCategory(t)===grp.key)}))
+              ).map(grp=>{
+                const grpTasks = grp.tasks;
                 if (!grpTasks.length) return null;
                 return (
                   <div key={grp.key}>
@@ -771,7 +1232,7 @@ function App() {
                     </div>
                     {grpTasks.map(t=><TaskItem key={t.id} task={t} lists={lists}
                       selected={selectedTask?.id===t.id} onClick={()=>setSelectedTask(t)}
-                      onToggle={()=>toggleStatus(t.id,t.status)} onDelete={()=>deleteTask(t.id)}
+                      onToggle={()=>toggleStatus(t.id,t.status)} onDelete={()=>requestDelete(t)}
                       onDelay={(task,type)=>delayTask(task,type)} onTrack={toggleTrack}/>)}
                   </div>
                 );
@@ -788,31 +1249,33 @@ function App() {
                   onDelay={(task,type)=>delayTask(task,type)} onTrack={toggleTrack}/>)}
               </>}
             </div>
-          </>) : (
-            <CalendarView tasks={filtered} lists={lists} selectedTask={selectedTask} onSelectTask={setSelectedTask}/>
-          )}
+            )}
+          </>)}
         </div>
 
         {selectedTask&&(
-          <DetailPanel task={selectedTask} lists={lists}
-            onUpdate={updateTask} onDelete={()=>deleteTask(selectedTask.id)}
+          <DetailPanel task={selectedTask} lists={lists} defaultFields={defaultFields}
+            onUpdate={updateTask} onDelete={()=>requestDelete(selectedTask)}
             onClose={()=>setSelectedTask(null)} onDelay={delayTask}/>
         )}
       </div>
 
-      {showModal&&<NewTaskModal lists={lists}
-        defaultList={selectedList!=='all'&&selectedList!=='today'&&selectedList!=='seguiment'?selectedList:lists[0]?.id}
-        onSave={addTask} onClose={()=>setShowModal(false)}/>}
-      {showListModal&&<NewListModal onSave={addList} onClose={()=>setShowListModal(false)}/>}
-      {editingList&&<ListSettingsModal list={editingList} onSave={(id,data)=>updateList(id,data)} onClose={()=>setEditingList(null)}/>}
+      {showModal&&<NewTaskModal lists={lists} defaultFields={defaultFields}
+        defaultList={(!DATE_QUICK_VIEWS.includes(selectedList)&&selectedList!=='all'&&selectedList!=='seguiment')?selectedList:lists[0]?.id}
+        preFill={voicePreFill}
+        onSave={addTask} onClose={()=>{setShowModal(false);setVoicePreFill(null);}}/>}
+      {showListModal&&<NewListModal onSave={addList} onClose={()=>setShowListModal(false)} groups={presentGroups}/>}
+      {editingList&&<ListSettingsModal list={editingList} currentUserUid={user.uid} onSave={(id,data)=>updateList(id,data)} onClose={()=>setEditingList(null)} groups={presentGroups} onShare={shareList} onUnshare={unshareList}/>}
       {showDefaultFields&&<DefaultFieldsModal fields={defaultFields} onSave={saveDefaultFields} onClose={()=>setShowDefaultFields(false)}/>}
+      {showGcalSettings&&<GcalSettingsModal calendars={gcalCalendars} onSave={cals=>{saveGcalCalendars(cals);setShowGcalSettings(false);}} onClose={()=>setShowGcalSettings(false)}/>}
+      {deleteConfirm&&<DeleteSeriesModal task={deleteConfirm} onConfirm={mode=>deleteSeries(deleteConfirm,mode)} onClose={()=>setDeleteConfirm(null)}/>}
       {toast&&<div className="toast"><span style={{color:'var(--success)',fontSize:15}}>✓</span>{toast.replace('✓ ','')}</div>}
     </>
   );
 }
 
 // ─── SIDEBAR ITEM ─────────────────────────────────────────────────────────────
-function SidebarItem({icon,dot,label,count,active,onClick,onSettings,onDelete}) {
+function SidebarItem({icon,dot,label,count,active,onClick,onSettings,onDelete,sharedIcon}) {
   const [hover,setHover] = useState(false);
   return (
     <div className={`sidebar-item ${active?'active':''}`} onClick={onClick}
@@ -820,6 +1283,8 @@ function SidebarItem({icon,dot,label,count,active,onClick,onSettings,onDelete}) 
       {icon&&<span style={{width:14,height:14,flexShrink:0}}>{icon}</span>}
       {dot&&<span className="sidebar-dot" style={{background:dot}}/>}
       <span style={{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{label}</span>
+      {sharedIcon==='recv'&&<span title="Compartida amb tu" style={{fontSize:11,opacity:.5,flexShrink:0}}>👥</span>}
+      {sharedIcon==='sent'&&<span title="Compartida" style={{fontSize:11,opacity:.5,flexShrink:0}}>🔗</span>}
       {onSettings&&hover&&(
         <span className="sidebar-gear" onClick={e=>{e.stopPropagation();onSettings();}} title="Configuració">
           <svg style={{width:12,height:12}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
@@ -843,7 +1308,8 @@ function TaskItem({task,lists,selected,onClick,onToggle,onDelete,onDelay,onTrack
   const recLabel = RECURRENCE_OPTIONS.find(r=>r.value===task.recurrence&&task.recurrence!=='none')?.label;
   return (
     <div className={`task-item ${done?'done':''} ${selected?'selected':''}`} onClick={onClick}
-      onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)}>
+      onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)}
+      style={list?{background:hexToRgba(list.color,.10)}:undefined}>
       <div className={`task-check ${done?'checked':''}`} onClick={e=>{e.stopPropagation();onToggle();}}>{Ic.check}</div>
       <div className="task-body">
         <div className="task-title">{task.title}</div>
@@ -887,7 +1353,7 @@ function TaskItem({task,lists,selected,onClick,onToggle,onDelete,onDelay,onTrack
 }
 
 // ─── DETAIL PANEL ─────────────────────────────────────────────────────────────
-function DetailPanel({task,lists,onUpdate,onDelete,onClose,onDelay}) {
+function DetailPanel({task,lists,defaultFields,onUpdate,onDelete,onClose,onDelay}) {
   const [local,setLocal] = useState(task);
   const [tagInput,setTagInput] = useState('');
   const timer = useRef(null);
@@ -965,6 +1431,28 @@ function DetailPanel({task,lists,onUpdate,onDelete,onClose,onDelay}) {
             <input type="time" className="detail-date" value={local.endTime||''} onChange={e=>push({endTime:e.target.value})}/>
           </div>
         </div>
+        {(defaultFields||[]).length>0&&(
+          <div className="custom-fields-section">
+            <div className="custom-fields-title"><span>Camps per defecte</span></div>
+            {(defaultFields||[]).map(f=>(
+              <div key={f.id} className="detail-field" style={{marginBottom:10}}>
+                <label>{f.name}</label>
+                <CustomFieldInput field={f} value={customValues[f.id]} onChange={v=>setCustomValue(f.id,v)}/>
+              </div>
+            ))}
+          </div>
+        )}
+        {customFields.length>0&&(
+          <div className="custom-fields-section">
+            <div className="custom-fields-title"><span>Camps de la llista</span></div>
+            {customFields.map(f=>(
+              <div key={f.id} className="detail-field" style={{marginBottom:10}}>
+                <label>{f.name}</label>
+                <CustomFieldInput field={f} value={customValues[f.id]} onChange={v=>setCustomValue(f.id,v)}/>
+              </div>
+            ))}
+          </div>
+        )}
         {/* Delay buttons */}
         {local.status!=='completada'&&(
           <div className="detail-field">
@@ -1051,17 +1539,6 @@ function DetailPanel({task,lists,onUpdate,onDelete,onClose,onDelay}) {
             <button className="add-subtask-btn" onClick={addSubtask}>{Ic.plus} Afegir subtasca</button>
           </div>
         </div>
-        {customFields.length>0&&(
-          <div className="custom-fields-section">
-            <div className="custom-fields-title"><span>Camps de la llista</span></div>
-            {customFields.map(f=>(
-              <div key={f.id} className="detail-field" style={{marginBottom:10}}>
-                <label>{f.name}</label>
-                <CustomFieldInput field={f} value={customValues[f.id]} onChange={v=>setCustomValue(f.id,v)}/>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );
@@ -1095,6 +1572,8 @@ function FieldsManager({fields,onChange}) {
   const [showAdd,setShowAdd] = useState(false);
   const [newField,setNewField] = useState({name:'',type:'text',options:[]});
   const [newOption,setNewOption] = useState('');
+  const [editingId,setEditingId] = useState(null);
+  const [editOption,setEditOption] = useState('');
   const addField = () => {
     if (!newField.name.trim()) return;
     onChange([...fields,{...newField,id:uid(),name:newField.name.trim()}]);
@@ -1105,19 +1584,51 @@ function FieldsManager({fields,onChange}) {
     if (!newOption.trim()) return;
     setNewField(f=>({...f,options:[...f.options,newOption.trim()]})); setNewOption('');
   };
+  const addExistingOption = id => {
+    if (!editOption.trim()) return;
+    onChange(fields.map(f=>f.id===id?{...f,options:[...(f.options||[]),editOption.trim()]}:f));
+    setEditOption('');
+  };
+  const removeExistingOption = (id,opt) => {
+    onChange(fields.map(f=>f.id===id?{...f,options:(f.options||[]).filter(o=>o!==opt)}:f));
+  };
   const typeLabel = t => FIELD_TYPES.find(x=>x.value===t)?.label||t;
   return (
     <div>
       {fields.length===0&&!showAdd&&<p style={{fontSize:12,color:'var(--text3)',marginBottom:10}}>Cap camp personalitzat.</p>}
       {fields.map(f=>(
-        <div key={f.id} className="field-row">
-          <span style={{width:12,height:12,color:'var(--text3)',flexShrink:0}}>{Ic.drag}</span>
-          <span className="field-row-name">{f.name}</span>
-          <span className="field-type-badge">{typeLabel(f.type)}</span>
-          {f.type==='select'&&<span style={{fontSize:10,color:'var(--text3)'}}>{(f.options||[]).length} opc</span>}
-          <div className="field-actions">
-            <button className="field-action-btn danger" onClick={()=>removeField(f.id)}>{Ic.trash}</button>
+        <div key={f.id}>
+          <div className="field-row">
+            <span style={{width:12,height:12,color:'var(--text3)',flexShrink:0}}>{Ic.drag}</span>
+            <span className="field-row-name">{f.name}</span>
+            <span className="field-type-badge">{typeLabel(f.type)}</span>
+            {f.type==='select'&&(
+              <span style={{fontSize:10,color:'var(--text3)',cursor:'pointer',textDecoration:'underline'}}
+                onClick={()=>{setEditingId(editingId===f.id?null:f.id);setEditOption('');}}>
+                {(f.options||[]).length} opc
+              </span>
+            )}
+            <div className="field-actions">
+              <button className="field-action-btn danger" onClick={()=>removeField(f.id)}>{Ic.trash}</button>
+            </div>
           </div>
+          {editingId===f.id&&f.type==='select'&&(
+            <div className="add-field-form" style={{marginTop:4,marginBottom:8}}>
+              <div style={{fontSize:11,color:'var(--text3)',marginBottom:6}}>Opcions:</div>
+              {(f.options||[]).map(o=>(
+                <div key={o} className="option-row" style={{marginBottom:4}}>
+                  <span style={{flex:1,fontSize:13}}>{o}</span>
+                  <button className="option-del" onClick={()=>removeExistingOption(f.id,o)}>×</button>
+                </div>
+              ))}
+              <div className="option-row">
+                <input className="input" placeholder="Nova opció..." value={editOption}
+                  onChange={e=>setEditOption(e.target.value)}
+                  onKeyDown={e=>e.key==='Enter'&&addExistingOption(f.id)} style={{flex:1}}/>
+                <button className="btn btn-ghost" style={{padding:'6px 10px',fontSize:12}} onClick={()=>addExistingOption(f.id)}>+</button>
+              </div>
+            </div>
+          )}
         </div>
       ))}
       {showAdd ? (
@@ -1169,7 +1680,7 @@ function DefaultFieldsModal({fields,onSave,onClose}) {
     <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div className="modal">
         <h2>Camps per defecte</h2>
-        <p style={{fontSize:12,color:'var(--text2)',marginTop:-6}}>Totes les llistes noves heretaran aquests camps.</p>
+        <p style={{fontSize:12,color:'var(--text2)',marginTop:-6}}>Aquests camps surten a totes les tasques, independentment de la llista.</p>
         <div className="divider"/>
         <FieldsManager fields={local} onChange={setLocal}/>
         <div className="modal-actions">
@@ -1181,25 +1692,101 @@ function DefaultFieldsModal({fields,onSave,onClose}) {
   );
 }
 
+// ─── GOOGLE CALENDAR SETTINGS MODAL ────────────────────────────────────────────
+function GcalSettingsModal({calendars,onSave,onClose}) {
+  const [local,setLocal] = useState(calendars.length?calendars:[{id:'primary',label:'Principal',color:'#4f8ef7'}]);
+  const update = (i,patch) => setLocal(l=>l.map((c,idx)=>idx===i?{...c,...patch}:c));
+  const remove = i => setLocal(l=>l.filter((_,idx)=>idx!==i));
+  const add = () => setLocal(l=>[...l,{id:'',label:'',color:LIST_COLORS[(l.length)%LIST_COLORS.length]}]);
+  return (
+    <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className="modal">
+        <h2>Calendaris de Google</h2>
+        <p style={{fontSize:12,color:'var(--text2)',marginTop:-6}}>
+          Afegeix l'ID de cada calendari de Google que vulguis veure superposat al calendari de tasques.
+          L'ID es troba a la configuració del calendari a Google ("Integrar el calendari" → "ID del calendari"). Per al teu calendari principal, fes servir <code>primary</code>.
+        </p>
+        <div className="divider"/>
+        <div style={{display:'flex',flexDirection:'column',gap:10}}>
+          {local.map((cal,i)=>(
+            <div key={i} style={{display:'flex',gap:8,alignItems:'center',opacity:cal.active===false?.5:1}}>
+              <input type="checkbox" checked={cal.active!==false} onChange={e=>update(i,{active:e.target.checked})}
+                title="Mostrar/amagar aquest calendari" style={{width:16,height:16,flexShrink:0,cursor:'pointer'}}/>
+              <div className="color-opts" style={{flexWrap:'nowrap'}}>
+                {LIST_COLORS.slice(0,6).map(c=><div key={c} className={`color-opt ${cal.color===c?'selected':''}`} style={{background:c,width:18,height:18}} onClick={()=>update(i,{color:c})}/>)}
+              </div>
+              <input className="input" style={{flex:1}} placeholder="ID del calendari (p.ex. primary o nom@gmail.com)"
+                value={cal.id} onChange={e=>update(i,{id:e.target.value})}/>
+              <input className="input" style={{width:110}} placeholder="Etiqueta"
+                value={cal.label} onChange={e=>update(i,{label:e.target.value})}/>
+              <button className="btn btn-ghost" style={{padding:'6px 8px'}} onClick={()=>remove(i)} title="Eliminar">
+                <span style={{width:14,height:14,display:'inline-flex'}}>{Ic.trash}</span>
+              </button>
+            </div>
+          ))}
+        </div>
+        <button className="btn btn-ghost" style={{marginTop:10}} onClick={add}>+ Afegir calendari</button>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel·lar</button>
+          <button className="btn btn-primary" onClick={()=>onSave(local.filter(c=>c.id.trim()).map(c=>({...c,label:c.label.trim()||c.id})))}>Guardar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── LIST SETTINGS MODAL ──────────────────────────────────────────────────────
-function ListSettingsModal({list,onSave,onClose}) {
-  const [tab,setTab]     = useState('general');
-  const [name,setName]   = useState(list.name);
-  const [color,setColor] = useState(list.color);
+function ListSettingsModal({list,currentUserUid,onSave,onClose,groups,onShare,onUnshare}) {
+  const [tab,setTab]       = useState('general');
+  const [name,setName]     = useState(list.name);
+  const [color,setColor]   = useState(list.color);
+  const [group,setGroup]   = useState(list.group||LIST_GROUPS[0]);
   const [fields,setFields] = useState(list.fields||[]);
-  const save = () => onSave(list.id,{name,color,fields});
+  const [shareEmail,setShareEmail]     = useState('');
+  const [shareError,setShareError]     = useState('');
+  const [shareLoading,setShareLoading] = useState(false);
+  const isOwner = list.ownerId===currentUserUid;
+  const allGroups = [...new Set([...LIST_GROUPS,...(groups||[])])];
+  const sharedWithUids   = list.sharedWith||[];
+  const sharedWithEmails = list.sharedWithEmails||{};
+  const save = () => onSave(list.id,{name,color,group,fields});
+  const handleShare = async () => {
+    if (!shareEmail.trim()) return;
+    setShareLoading(true); setShareError('');
+    const err = await onShare(list.id, shareEmail.trim());
+    if (err) setShareError(err);
+    else setShareEmail('');
+    setShareLoading(false);
+  };
   return (
     <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div className="modal">
         <h2>Configuració: {list.name}</h2>
         <div className="modal-tabs">
-          <button className={`modal-tab ${tab==='general'?'active':''}`} onClick={()=>setTab('general')}>General</button>
-          <button className={`modal-tab ${tab==='fields'?'active':''}`} onClick={()=>setTab('fields')}>Camps personalitzats</button>
+          {isOwner&&<button className={`modal-tab ${tab==='general'?'active':''}`} onClick={()=>setTab('general')}>General</button>}
+          {isOwner&&<button className={`modal-tab ${tab==='fields'?'active':''}`} onClick={()=>setTab('fields')}>Camps personalitzats</button>}
+          {isOwner&&<button className={`modal-tab ${tab==='share'?'active':''}`} onClick={()=>setTab('share')}>Compartir</button>}
         </div>
-        {tab==='general'&&(<>
+        {!isOwner&&(
+          <div style={{marginTop:12,padding:'12px 14px',background:'rgba(247,183,79,.08)',border:'1px solid rgba(247,183,79,.2)',borderRadius:10}}>
+            <p style={{fontSize:12,color:'var(--text2)',marginBottom:10}}>
+              Aquesta llista pertany a un altre usuari. Pots veure i editar les tasques però no pots canviar la configuració.
+            </p>
+            <button className="btn btn-danger-soft" style={{fontSize:12}} onClick={()=>{onUnshare(list.id,currentUserUid);onClose();}}>
+              Deixar de seguir la llista
+            </button>
+          </div>
+        )}
+        {isOwner&&tab==='general'&&(<>
           <div className="detail-field" style={{marginTop:8}}>
             <label>Nom</label>
             <input className="input" value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&save()}/>
+          </div>
+          <div className="detail-field">
+            <label>Grup</label>
+            <select className="input" value={group} onChange={e=>setGroup(e.target.value)}>
+              {allGroups.map(g=><option key={g} value={g}>{g}</option>)}
+            </select>
           </div>
           <div>
             <label style={{fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:'.06em',color:'var(--text3)',display:'block',marginBottom:8}}>Color</label>
@@ -1208,15 +1795,50 @@ function ListSettingsModal({list,onSave,onClose}) {
             </div>
           </div>
         </>)}
-        {tab==='fields'&&(
+        {isOwner&&tab==='fields'&&(
           <div style={{marginTop:8}}>
             <p style={{fontSize:12,color:'var(--text2)',marginBottom:12}}>Camps específics d'aquesta llista.</p>
             <FieldsManager fields={fields} onChange={setFields}/>
           </div>
         )}
+        {isOwner&&tab==='share'&&(
+          <div style={{marginTop:12,display:'flex',flexDirection:'column',gap:12}}>
+            <p style={{fontSize:12,color:'var(--text2)'}}>
+              Comparteix la llista amb altres usuaris. Podran veure i editar totes les tasques.
+            </p>
+            <div style={{display:'flex',gap:8}}>
+              <input className="input" type="email" placeholder="Correu electrònic de l'usuari"
+                value={shareEmail} onChange={e=>{setShareEmail(e.target.value);setShareError('');}}
+                onKeyDown={e=>e.key==='Enter'&&handleShare()} style={{flex:1}}/>
+              <button className="btn btn-primary" style={{whiteSpace:'nowrap',padding:'8px 16px'}}
+                onClick={handleShare} disabled={shareLoading||!shareEmail.trim()}>
+                {shareLoading?'...':'Afegir'}
+              </button>
+            </div>
+            {shareError&&<p style={{color:'var(--danger)',fontSize:12,marginTop:-4}}>{shareError}</p>}
+            <div style={{borderTop:'1px solid var(--border)',paddingTop:10}}>
+              {sharedWithUids.length===0 ? (
+                <p style={{fontSize:12,color:'var(--text3)',textAlign:'center',padding:'12px 0'}}>
+                  Aquesta llista no està compartida amb ningú.
+                </p>
+              ) : sharedWithUids.map(uid=>(
+                <div key={uid} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 0',borderBottom:'1px solid var(--border)'}}>
+                  <div className="sidebar-avatar" style={{width:28,height:28,fontSize:11,flexShrink:0}}>
+                    {(sharedWithEmails[uid]?.[0]||'?').toUpperCase()}
+                  </div>
+                  <span style={{flex:1,fontSize:13}}>{sharedWithEmails[uid]||uid}</span>
+                  <button className="btn btn-ghost btn-icon" style={{color:'var(--danger)',padding:5}}
+                    title="Eliminar accés" onClick={()=>onUnshare(list.id,uid)}>
+                    {Ic.x}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="modal-actions">
-          <button className="btn btn-ghost" onClick={onClose}>Cancel·lar</button>
-          <button className="btn btn-primary" onClick={save}>Guardar</button>
+          <button className="btn btn-ghost" onClick={onClose}>Tancar</button>
+          {isOwner&&tab!=='share'&&<button className="btn btn-primary" onClick={save}>Guardar</button>}
         </div>
       </div>
     </div>
@@ -1224,9 +1846,11 @@ function ListSettingsModal({list,onSave,onClose}) {
 }
 
 // ─── NEW LIST MODAL ───────────────────────────────────────────────────────────
-function NewListModal({onSave,onClose}) {
+function NewListModal({onSave,onClose,groups}) {
   const [name,setName]   = useState('');
   const [color,setColor] = useState(LIST_COLORS[0]);
+  const allGroups = [...new Set([...LIST_GROUPS,...(groups||[])])];
+  const [group,setGroup] = useState(allGroups[0]||'Personal');
   const ref = useRef(null);
   useEffect(()=>ref.current?.focus(),[]);
   return (
@@ -1234,7 +1858,13 @@ function NewListModal({onSave,onClose}) {
       <div className="modal modal-sm">
         <h2>Nova llista</h2>
         <input ref={ref} className="input" placeholder="Nom" value={name}
-          onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&name.trim()&&onSave({name,color})}/>
+          onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&name.trim()&&onSave({name,color,group})}/>
+        <div className="detail-field">
+          <label>Grup</label>
+          <select className="input" value={group} onChange={e=>setGroup(e.target.value)}>
+            {allGroups.map(g=><option key={g} value={g}>{g}</option>)}
+          </select>
+        </div>
         <div>
           <label style={{fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:'.06em',color:'var(--text3)',display:'block',marginBottom:8}}>Color</label>
           <div className="color-opts">
@@ -1244,7 +1874,27 @@ function NewListModal({onSave,onClose}) {
         <p style={{fontSize:11,color:'var(--text3)'}}>Heretarà els camps per defecte.</p>
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancel·lar</button>
-          <button className="btn btn-primary" onClick={()=>name.trim()&&onSave({name,color})}>Crear</button>
+          <button className="btn btn-primary" onClick={()=>name.trim()&&onSave({name,color,group})}>Crear</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── DELETE SERIES MODAL ─────────────────────────────────────────────────────
+function DeleteSeriesModal({task,onConfirm,onClose}) {
+  return (
+    <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className="modal modal-sm">
+        <h2>Eliminar tasca recurrent</h2>
+        <p style={{fontSize:13,color:'var(--text2)'}}>"{task.title}" forma part d'una sèrie. Què vols eliminar?</p>
+        <div style={{display:'flex',flexDirection:'column',gap:8,marginTop:8}}>
+          <button className="btn btn-ghost" style={{justifyContent:'flex-start'}} onClick={()=>onConfirm('this')}>Només aquesta ocurrència</button>
+          <button className="btn btn-ghost" style={{justifyContent:'flex-start'}} onClick={()=>onConfirm('future')}>Aquesta i les futures</button>
+          <button className="btn btn-danger-soft" style={{justifyContent:'flex-start'}} onClick={()=>onConfirm('all')}>Tota la sèrie</button>
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel·lar</button>
         </div>
       </div>
     </div>
@@ -1252,9 +1902,10 @@ function NewListModal({onSave,onClose}) {
 }
 
 // ─── NEW TASK MODAL ───────────────────────────────────────────────────────────
-function NewTaskModal({lists,defaultList,onSave,onClose}) {
+function NewTaskModal({lists,defaultFields,defaultList,onSave,onClose,preFill}) {
   const [form,setForm] = useState({
-    title:'',description:'',startDate:today,endDate:'',startTime:'',endTime:'',
+    title:preFill?.title||'',description:'',startDate:preFill?.endDate||today,
+    endDate:preFill?.endDate||'',startTime:'',endTime:preFill?.endTime||'',
     priority:'mitjana',status:'pendent',tags:[],
     listId:defaultList||lists[0]?.id||'',subtasks:[],customValues:{},
     reminderMinutes:0,recurrence:'none',recurrenceEndDate:''
@@ -1285,6 +1936,24 @@ function NewTaskModal({lists,defaultList,onSave,onClose}) {
             {lists.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
           </select>
         </div>
+        {(()=>{
+          // Camps per defecte (configurats a "Camps per defecte"): s'apliquen a totes les tasques,
+          // independentment de la llista. Es mostren aquí en files de 3.
+          const dFields = defaultFields||[];
+          if(!dFields.length) return null;
+          const rows = [];
+          for (let i=0;i<dFields.length;i+=3) rows.push(dFields.slice(i,i+3));
+          return rows.map((row,ri)=>(
+            <div className="input-row" key={ri}>
+              {row.map(f=>(
+                <div style={{flex:1}} key={f.id}>
+                  <label style={{fontSize:10,color:'var(--text3)',display:'block',marginBottom:3}}>{f.name}</label>
+                  <CustomFieldInput field={f} value={form.customValues[f.id]} onChange={v=>set('customValues',{...form.customValues,[f.id]:v})}/>
+                </div>
+              ))}
+            </div>
+          ));
+        })()}
         <div className="input-row">
           <div style={{flex:1}}>
             <label style={{fontSize:10,color:'var(--text3)',display:'block',marginBottom:3}}>Inici</label>
@@ -1339,6 +2008,24 @@ function NewTaskModal({lists,defaultList,onSave,onClose}) {
               onKeyDown={e=>{if(e.key==='Enter'||e.key===','){e.preventDefault();addTag(tagInput);}}}/>
           </div>
         </div>
+        {(()=>{
+          const selList = lists.find(l=>l.id===form.listId);
+          const listFields = selList?.fields||[];
+          // Camps propis d'aquesta llista (no provenen dels "Camps per defecte"): es mostren a part.
+          const customFields = listFields.filter(f=>!(defaultFields||[]).some(df=>df.name===f.name&&df.type===f.type));
+          if(!customFields.length) return null;
+          return (
+            <div className="custom-fields-section">
+              <div className="custom-fields-title"><span>Camps de la llista</span></div>
+              {customFields.map(f=>(
+                <div key={f.id} style={{marginBottom:10}}>
+                  <label style={{fontSize:10,color:'var(--text3)',display:'block',marginBottom:3}}>{f.name}</label>
+                  <CustomFieldInput field={f} value={form.customValues[f.id]} onChange={v=>set('customValues',{...form.customValues,[f.id]:v})}/>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancel·lar</button>
           <button className="btn btn-primary" onClick={submit}>Crear tasca</button>
@@ -1348,8 +2035,68 @@ function NewTaskModal({lists,defaultList,onSave,onClose}) {
   );
 }
 
+// ─── MATRIX VIEW ──────────────────────────────────────────────────────────────
+// Quadrant: files = llistes, columnes = valors d'un "camp per defecte" de tipus llista (select).
+// Es basa en les tasques ja filtrades a la pàgina principal (filtres d'estat, prioritat, etiqueta, etc.)
+function MatrixView({tasks,lists,defaultFields,selectedTask,onSelectTask}) {
+  const field = (defaultFields||[]).find(f=>f.type==='select'&&(f.options||[]).length>0);
+  if (!field) {
+    return (
+      <div className="empty-state">
+        {Ic.chart}
+        <p>Defineix un "camp per defecte" de tipus llista (amb opcions, p. ex. "Llarg"/"Curt") per veure la matriu.</p>
+      </div>
+    );
+  }
+  const columns = field.options;
+  const rowsLists = lists.filter(l=>tasks.some(t=>t.listId===l.id));
+  return (
+    <div className="matrix-view">
+      {rowsLists.length===0 ? (
+        <div className="empty-state">{Ic.chart}<p>Cap tasca per mostrar a la matriu.</p></div>
+      ) : (
+        <table className="matrix-table">
+          <thead>
+            <tr>
+              <th>Llista</th>
+              {columns.map(c=><th key={c}>{c}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {rowsLists.map(l=>{
+              const rowBg = hexToRgba(l.color,.10);
+              return (
+              <tr key={l.id}>
+                <td style={{background:rowBg}}>
+                  <div className="matrix-row-label">
+                    <span style={{width:8,height:8,borderRadius:'50%',background:l.color,display:'inline-block',flexShrink:0}}/>
+                    {l.name}
+                  </div>
+                </td>
+                {columns.map(c=>{
+                  const ts = tasks.filter(t=>t.listId===l.id&&(t.customValues||{})[field.id]===c);
+                  return (
+                    <td key={c} style={{background:rowBg}}>
+                      {ts.length===0 ? <span className="matrix-empty-cell">—</span> : ts.map(t=>(
+                        <div key={t.id} className={`matrix-task-chip ${selectedTask?.id===t.id?'selected':''} ${t.status==='completada'?'completada':''}`}
+                          onClick={()=>onSelectTask(t)} style={{background:hexToRgba(l.color,.22)}}>
+                          {t.title}
+                        </div>
+                      ))}
+                    </td>
+                  );
+                })}
+              </tr>
+            );})}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
 // ─── CALENDAR VIEW ────────────────────────────────────────────────────────────
-function CalendarView({tasks,lists,selectedTask,onSelectTask}) {
+function CalendarView({tasks,lists,selectedTask,onSelectTask,gcalToken,gcalEvents,setGcalEvents,gcalError,setGcalError,gcalCalendars}) {
   const now = new Date();
   const [year,setYear]   = useState(now.getFullYear());
   const [month,setMonth] = useState(now.getMonth());
@@ -1368,12 +2115,27 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask}) {
   const totalCells  = Math.ceil((startOffset+lastDay.getDate())/7)*7;
   const cells = Array.from({length:totalCells},(_,i)=>{
     const d = new Date(year,month,1-startOffset+i);
-    return {date:d,dateStr:d.toISOString().split('T')[0],inMonth:d.getMonth()===month};
+    return {date:d,dateStr:ymd(d),inMonth:d.getMonth()===month};
   });
+  // Carrega els esdeveniments de Google Calendar per al mes visible
+  const activeGcalCalendars = (gcalCalendars||[]).filter(c=>c.active!==false);
+  useEffect(()=>{
+    if (!gcalToken || !activeGcalCalendars.length) { setGcalEvents([]); return; }
+    let cancelled = false;
+    Promise.all(activeGcalCalendars.map(cal=>
+      fetchGcalEvents(gcalToken, cal.id, cells[0].dateStr, cells[cells.length-1].dateStr, cal)
+        .catch(()=>{throw new Error('gcal-fetch-failed');})
+    )).then(results=>{if(!cancelled){setGcalEvents(results.flat());setGcalError('');}})
+      .catch(()=>{if(!cancelled)setGcalError('No s\'han pogut carregar els esdeveniments de Google Calendar. Torna a connectar.');});
+    return ()=>{cancelled=true;};
+  },[gcalToken,year,month,JSON.stringify(activeGcalCalendars)]);
   const tasksForDay = dateStr => tasks.filter(t=>{
+    // Cada ocurrència d'una tasca recurrent es mostra només el seu propi dia
+    if (t.seriesId) return t.endDate === dateStr;
     const start=t.startDate||t.endDate; const end=t.endDate||t.startDate;
     if(!start)return false; return start<=dateStr&&dateStr<=end;
   });
+  const gcalForDay = dateStr => gcalEvents.filter(e=>e.dateStr===dateStr);
   const monthName = firstDay.toLocaleDateString('ca-ES',{month:'long',year:'numeric'});
   const DAYS = ['Dl','Dt','Dc','Dj','Dv','Ds','Dg'];
   return (
@@ -1391,43 +2153,67 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask}) {
         {DAYS.map(d=><div key={d} className="cal-dow">{d}</div>)}
         {cells.map(({date,dateStr,inMonth})=>{
           const dayTasks = tasksForDay(dateStr);
+          const dayGcal  = gcalForDay(dateStr);
           const isToday  = dateStr===today;
-          const MAX=3; const visible=dayTasks.slice(0,MAX); const extra=dayTasks.length-MAX;
+          const MAX=3; const visible=dayTasks.slice(0,MAX); const extraTasks=dayTasks.length-MAX;
+          const gcalVisible = dayGcal.slice(0,Math.max(0,MAX-visible.length));
+          const extra = extraTasks + (dayGcal.length-gcalVisible.length);
           const isPopup  = popup?.dateStr===dateStr;
           return (
             <div key={dateStr} className={`cal-day ${isToday?'today':''} ${!inMonth?'other-month':''}`}
-              onClick={()=>dayTasks.length>0&&setPopup(isPopup?null:{dateStr})}>
+              onClick={()=>(dayTasks.length>0||dayGcal.length>0)&&setPopup(isPopup?null:{dateStr})}>
               <div className="cal-day-num">{date.getDate()}</div>
               {visible.map(t=>{
                 const list=lists.find(l=>l.id===t.listId);
-                const color=list?.color||'var(--accent)';
+                const overdue=isOverdue(t);
+                const color=overdue?'var(--danger)':(list?.color||'var(--accent)');
                 return <div key={t.id} className="cal-task-chip"
                   style={{background:color+'22',color}}
                   onClick={e=>{e.stopPropagation();onSelectTask(t);setPopup(null);}}
-                  title={t.title}>{t.status==='completada'?'✓ ':''}{t.title}</div>;
+                  title={t.title}>{t.status==='completada'?'✓ ':overdue?'⚠ ':''}{t.title}</div>;
               })}
+              {gcalVisible.map((e,i)=>(
+                <div key={`g${i}`} className="cal-task-chip cal-gcal-chip"
+                  style={{background:(e.color||'#4f8ef7')+'22',color:e.color||'#4f8ef7'}}
+                  onClick={ev=>ev.stopPropagation()}
+                  title={`${e.calLabel||'Google Calendar'}: ${e.title}`}>📅 {e.time?`${e.time} `:''}{e.title}</div>
+              ))}
               {extra>0&&<div className="cal-more">+{extra} més</div>}
-              {isPopup&&dayTasks.length>MAX&&(
+              {isPopup&&(dayTasks.length>MAX||dayGcal.length>0)&&(
                 <div ref={popupRef} className="cal-day-tasks-popup" onClick={e=>e.stopPropagation()}>
                   <h4>{date.toLocaleDateString('ca-ES',{day:'numeric',month:'long'})}</h4>
                   {dayTasks.map(t=>{
                     const list=lists.find(l=>l.id===t.listId);
+                    const overdue=isOverdue(t);
                     return <div key={t.id} className="cal-popup-task" onClick={()=>{onSelectTask(t);setPopup(null);}}>
                       <span className={`priority-dot p-${t.priority}`}/>
-                      <span style={{flex:1}}>{t.title}</span>
+                      <span style={{flex:1,color:overdue?'var(--danger)':undefined}}>{overdue?'⚠ ':''}{t.title}</span>
                       {list&&<span style={{fontSize:10,color:list.color}}>{list.name}</span>}
                     </div>;
                   })}
+                  {dayGcal.map((e,i)=>(
+                    <div key={`g${i}`} className="cal-popup-task">
+                      <span style={{fontSize:12}}>📅</span>
+                      <span style={{flex:1}}>{e.time?`${e.time} `:''}{e.title}</span>
+                      <span style={{fontSize:10,color:e.color||'#4f8ef7'}}>{e.calLabel||'Google'}</span>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
           );
         })}
       </div>
+      {gcalError&&<p style={{fontSize:12,color:'var(--danger)',marginTop:10}}>{gcalError}</p>}
       <div style={{display:'flex',gap:12,flexWrap:'wrap',marginTop:14,fontSize:11,color:'var(--text3)'}}>
         {lists.map(l=><span key={l.id} style={{display:'flex',alignItems:'center',gap:4}}>
           <span style={{width:8,height:8,borderRadius:'50%',background:l.color,display:'inline-block'}}/>{l.name}
         </span>)}
+        {gcalToken&&activeGcalCalendars.map(cal=>(
+          <span key={cal.id} style={{display:'flex',alignItems:'center',gap:4}}>
+            <span style={{width:8,height:8,borderRadius:'50%',background:cal.color||'#4f8ef7',display:'inline-block'}}/>{cal.label||cal.id}
+          </span>
+        ))}
       </div>
     </div>
   );
@@ -1463,7 +2249,7 @@ function getTaskOccurrences(task, startStr, endStr) {
 
 function getSeriesStart(task) {
   // Data d'inici de la sèrie: createdAt > startDate > endDate
-  if (task.createdAt?.toDate) return task.createdAt.toDate().toISOString().split('T')[0];
+  if (task.createdAt?.toDate) return ymd(task.createdAt.toDate());
   if (task.startDate) return task.startDate;
   return task.endDate || today;
 }
@@ -1476,7 +2262,7 @@ function getPeriodDays(seriesStart, period) {
   else end.setFullYear(end.getFullYear()+1);
   const days = [];
   const d = new Date(start);
-  while (d <= end) { days.push(d.toISOString().split('T')[0]); d.setDate(d.getDate()+1); }
+  while (d <= end) { days.push(ymd(d)); d.setDate(d.getDate()+1); }
   return days;
 }
 
