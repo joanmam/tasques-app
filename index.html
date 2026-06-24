@@ -773,12 +773,24 @@ function App() {
     rec.interimResults = false;
     rec.maxAlternatives = 1;
     setVoiceListening(true);
-    rec.onresult = e => {
+    rec.onresult = async e => {
       setVoiceListening(false);
       const transcript = e.results[0][0].transcript;
       const parsed = parseVoiceInput(transcript);
-      setVoicePreFill(parsed);
-      setShowModal(true);
+      const inboxList = lists.find(l=>l.name.toLowerCase()==='inbox');
+      if (!inboxList) { showToast('⚠ Crea una llista "Inbox" per guardar tasques de veu'); return; }
+      await addTask({
+        title: parsed.title||transcript,
+        listId: inboxList.id,
+        status:'pendent',
+        priority: parsed.priority||'mitjana',
+        endDate: parsed.endDate||'',
+        startDate: parsed.endDate||'',
+        startTime:'',endTime: parsed.endTime||'',
+        tags:[],subtasks:[],customValues:{},
+        reminderMinutes:0,recurrence:'none',recurrenceEndDate:''
+      });
+      showToast(`✓ Afegida a Inbox: ${parsed.title||transcript}`);
     };
     rec.onerror = () => { setVoiceListening(false); showToast('⚠ Error de reconeixement'); };
     rec.onend   = () => setVoiceListening(false);
@@ -1022,7 +1034,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.35</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.37</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -1915,7 +1927,7 @@ function NewTaskModal({lists,defaultFields,defaultList,onSave,onClose,preFill}) 
     title:preFill?.title||'',description:'',startDate:preFill?.endDate||today,
     endDate:preFill?.endDate||'',startTime:'',endTime:preFill?.endTime||'',
     priority:'mitjana',status:'pendent',tags:[],
-    listId:defaultList||lists[0]?.id||'',subtasks:[],customValues:{},
+    listId:preFill?.listId||defaultList||lists[0]?.id||'',subtasks:[],customValues:{},
     reminderMinutes:0,recurrence:'none',recurrenceEndDate:''
   });
   const [tagInput,setTagInput] = useState('');
