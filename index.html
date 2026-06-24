@@ -2433,7 +2433,7 @@ function GanttView({tasks,lists,defaultList,selectedTask,onSelectTask}) {
   const [ganttList,setGanttList]=useState(defaultList||'all');
   const [offset,setOffset]=useState(0);
 
-  const winStart=(()=>{const d=new Date();d.setDate(1);d.setDate(d.getDate()+offset);return d;})();
+  const winStart=(()=>{const d=new Date();d.setDate(d.getDate()-7+offset);return d;})();
   const winStartStr=ymd(winStart);
   const winEnd=new Date(winStart);winEnd.setDate(winEnd.getDate()+DAYS-1);
   const winEndStr=ymd(winEnd);
