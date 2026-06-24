@@ -56,6 +56,18 @@
     .spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
     .sidebar{width:240px;min-width:240px;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto}
+    @media(max-width:768px){
+      .sidebar{position:fixed;left:0;top:0;height:100vh;z-index:200;transform:translateX(-100%);transition:transform .25s ease;box-shadow:4px 0 20px rgba(0,0,0,.18)}
+      .sidebar.open{transform:translateX(0)}
+      .sidebar-backdrop{display:block!important}
+      .hamburger{display:flex!important}
+      .topbar{padding:10px 14px;gap:8px}
+      .topbar-title{font-size:15px}
+      .view-toggle{gap:1px}
+      .view-btn{padding:4px 8px;font-size:11px}
+    }
+    .sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:199}
+    .hamburger{display:none;background:none;border:none;cursor:pointer;padding:4px 6px;color:var(--text2);font-size:22px;line-height:1;align-items:center;justify-content:center}
     .sidebar-header{padding:16px 16px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
     .sidebar-logo{font-size:17px;font-weight:600;color:var(--accent);display:flex;align-items:center;gap:8px}
     .sidebar-logo svg{width:18px;height:18px}
@@ -581,6 +593,7 @@ function App() {
   const [showModal,setShowModal]         = useState(false);
   const [voiceListening,setVoiceListening] = useState(false);
   const [voicePreFill,setVoicePreFill]   = useState(null);
+  const [sidebarOpen,setSidebarOpen] = useState(false);
   const [showListModal,setShowListModal] = useState(false);
   const [editingList,setEditingList]     = useState(null);
   const [showDefaultFields,setShowDefaultFields] = useState(false);
@@ -1027,14 +1040,16 @@ function App() {
   return (
     <>
       <div style={{display:'flex',height:'100vh',overflow:'hidden',width:'100%'}}>
-        <aside className="sidebar">
+        <>
+        <div className={`sidebar-backdrop${sidebarOpen?' open':''}`} onClick={()=>setSidebarOpen(false)}/>
+        <aside className={`sidebar${sidebarOpen?' open':''}`}>
           <div className="sidebar-header">
             <span className="sidebar-logo">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.37</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v3.0</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -1050,17 +1065,17 @@ function App() {
           </div>
           <div className="sidebar-section">
             <SidebarItem icon={Ic.inbox} label="Totes" count={tasks.filter(t=>t.status!=='completada').length}
-              active={selectedList==='all'} onClick={()=>setSelectedList('all')}/>
+              active={selectedList==='all'} onClick={()=>{setSelectedList('all');setSidebarOpen(false)}}/>
             <SidebarItem icon={Ic.today} label="Avui" count={countFor('today')}
-              active={selectedList==='today'} onClick={()=>setSelectedList('today')}/>
+              active={selectedList==='today'} onClick={()=>{setSelectedList('today');setSidebarOpen(false)}}/>
             <SidebarItem icon={Ic.calendar} label="Demà" count={countFor('tomorrow')}
-              active={selectedList==='tomorrow'} onClick={()=>setSelectedList('tomorrow')}/>
+              active={selectedList==='tomorrow'} onClick={()=>{setSelectedList('tomorrow');setSidebarOpen(false)}}/>
             <SidebarItem icon={Ic.calendar} label="Pròxims 3 dies" count={countFor('next3')}
-              active={selectedList==='next3'} onClick={()=>setSelectedList('next3')}/>
+              active={selectedList==='next3'} onClick={()=>{setSelectedList('next3');setSidebarOpen(false)}}/>
             <SidebarItem icon={Ic.calendar} label="Pròxims 7 dies" count={countFor('next7')}
-              active={selectedList==='next7'} onClick={()=>setSelectedList('next7')}/>
+              active={selectedList==='next7'} onClick={()=>{setSelectedList('next7');setSidebarOpen(false)}}/>
             <SidebarItem icon={Ic.chart} label="Seguiment"
-              active={selectedList==='seguiment'} onClick={()=>setSelectedList('seguiment')}/>
+              active={selectedList==='seguiment'} onClick={()=>{setSelectedList('seguiment');setSidebarOpen(false)}}/>
           </div>
           <div className="sidebar-section">
             <div className="sidebar-section-title">Llistes</div>
@@ -1081,7 +1096,7 @@ function App() {
                   return (
                     <SidebarItem key={l.id} dot={l.color} label={l.name} count={countFor(l.id)}
                       sharedIcon={!isOwner?'recv':hasShares?'sent':null}
-                      active={selectedList===l.id} onClick={()=>setSelectedList(l.id)}
+                      active={selectedList===l.id} onClick={()=>{setSelectedList(l.id);setSidebarOpen(false)}}
                       onSettings={()=>setEditingList(l)} onDelete={isOwner?()=>deleteList(l.id):null}/>
                   );
                 })}
@@ -1127,9 +1142,11 @@ function App() {
             </div>
           </div>
         </aside>
+        </>
 
         <div className="main">
           <div className="topbar">
+            <button className="hamburger" onClick={()=>setSidebarOpen(o=>!o)}>☰</button>
             <div className="topbar-title">{listName}</div>
             {selectedList!=='seguiment' && <>
               <div className="view-toggle">
