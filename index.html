@@ -2460,7 +2460,7 @@ function GanttView({tasks,lists,defaultList,selectedTask,onSelectTask}) {
 
   const headerH=57; // month (28) + day (29)
   return (
-    <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+    <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0}}>
       {/* Toolbar */}
       <div style={{padding:'9px 16px',display:'flex',alignItems:'center',gap:8,borderBottom:'1px solid var(--border)',flexShrink:0}}>
         <select className="input" style={{width:175}} value={ganttList} onChange={e=>setGanttList(e.target.value)}>
