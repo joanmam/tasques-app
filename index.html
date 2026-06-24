@@ -1022,7 +1022,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.34</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v2.35</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -2429,9 +2429,10 @@ function Heatmap({days, logs, color, period}) {
 
 // ─── GANTT VIEW ───────────────────────────────────────────────────────────────
 function GanttView({tasks,lists,defaultList,selectedTask,onSelectTask}) {
-  const DAY_W=32, DAYS=90, ROW_H=38, LABEL_W=210;
+  const DAY_W=24, DAYS=60, ROW_H=38, LABEL_W=210;
   const [ganttList,setGanttList]=useState(defaultList||'all');
   const [offset,setOffset]=useState(0);
+  const scrollRef=useRef(null);
 
   const winStart=(()=>{const d=new Date();d.setDate(d.getDate()-7+offset);return d;})();
   const winStartStr=ymd(winStart);
@@ -2451,6 +2452,12 @@ function GanttView({tasks,lists,defaultList,selectedTask,onSelectTask}) {
   });
   const dayIdx=str=>{const diff=new Date(str+'T12:00')-winStart;return Math.floor(diff/86400000);};
   const todayIdx=days.findIndex(d=>d.isToday);
+  useEffect(()=>{
+    if(scrollRef.current&&todayIdx>=0){
+      const x=LABEL_W+todayIdx*DAY_W-200;
+      scrollRef.current.scrollLeft=Math.max(0,x);
+    }
+  },[offset]);
 
   const visibleTasks=tasks.filter(t=>{
     if(ganttList!=='all'&&t.listId!==ganttList) return false;
@@ -2474,7 +2481,7 @@ function GanttView({tasks,lists,defaultList,selectedTask,onSelectTask}) {
       </div>
 
       {/* Body: scrollable */}
-      <div style={{flex:1,overflow:'auto',position:'relative'}}>
+      <div ref={scrollRef} style={{flex:1,overflow:'auto',position:'relative'}}>
         <div style={{minWidth:LABEL_W+DAYS*DAY_W}}>
 
           {/* Sticky header */}
