@@ -454,6 +454,7 @@ const Ic = {
   chevL:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>,
   chevR:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>,
   drag:     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg>,
+  gantt:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="8" height="3" rx="1"/><rect x="7" y="10" width="10" height="3" rx="1"/><rect x="5" y="16" width="12" height="3" rx="1"/></svg>,
   clock:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
   bell:     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>,
   repeat:   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>,
@@ -1129,6 +1130,9 @@ function App() {
                 <button className={`view-btn ${view==='matrix'?'active':''}`} onClick={()=>setView('matrix')}>
                   <span style={{width:13,height:13}}>{Ic.chart}</span> Matriu
                 </button>
+                <button className={`view-btn ${view==='gantt'?'active':''}`} onClick={()=>setView('gantt')}>
+                  <span style={{width:13,height:13}}>{Ic.gantt}</span> Gantt
+                </button>
               </div>
               <button className={`btn btn-ghost btn-icon ${voiceListening?'voice-active':''}`}
                 onClick={startVoice} title="Nova tasca per veu"
@@ -1202,7 +1206,11 @@ function App() {
                 </>
               )}
             </div>
-            {view==='calendar' ? (
+            {view==='gantt' ? (
+              <GanttView tasks={tasks} lists={lists}
+                defaultList={isSpecificList?selectedList:'all'}
+                selectedTask={selectedTask} onSelectTask={setSelectedTask}/>
+            ) : view==='calendar' ? (
               <CalendarView tasks={filtered} lists={lists} selectedTask={selectedTask} onSelectTask={setSelectedTask}
                 gcalToken={gcalToken} gcalEvents={gcalEvents} setGcalEvents={setGcalEvents} gcalError={gcalError} setGcalError={setGcalError} gcalCalendars={gcalCalendars}/>
             ) : view==='matrix' ? (
@@ -2414,6 +2422,156 @@ function Heatmap({days, logs, color, period}) {
       </div>
       <div style={{display:'flex',justifyContent:'space-between',fontSize:9,color:'var(--text3)',marginTop:3}}>
         <span>{fmt(days[0])}</span><span>{fmt(days[days.length-1])}</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── GANTT VIEW ───────────────────────────────────────────────────────────────
+function GanttView({tasks,lists,defaultList,selectedTask,onSelectTask}) {
+  const DAY_W=32, DAYS=90, ROW_H=38, LABEL_W=210;
+  const [ganttList,setGanttList]=useState(defaultList||'all');
+  const [offset,setOffset]=useState(0);
+
+  const winStart=(()=>{const d=new Date();d.setDate(1);d.setDate(d.getDate()+offset);return d;})();
+  const winStartStr=ymd(winStart);
+  const winEnd=new Date(winStart);winEnd.setDate(winEnd.getDate()+DAYS-1);
+  const winEndStr=ymd(winEnd);
+
+  const days=[];
+  for(let i=0;i<DAYS;i++){
+    const d=new Date(winStart);d.setDate(d.getDate()+i);
+    days.push({str:ymd(d),d,isWeekend:[0,6].includes(d.getDay()),isToday:ymd(d)===today});
+  }
+  const months=[];
+  days.forEach((day,i)=>{
+    const label=day.d.toLocaleDateString('ca-ES',{month:'long',year:'numeric'});
+    if(!months.length||months[months.length-1].label!==label) months.push({label,count:1});
+    else months[months.length-1].count++;
+  });
+  const dayIdx=str=>{const diff=new Date(str+'T12:00')-winStart;return Math.floor(diff/86400000);};
+  const todayIdx=days.findIndex(d=>d.isToday);
+
+  const visibleTasks=tasks.filter(t=>{
+    if(ganttList!=='all'&&t.listId!==ganttList) return false;
+    const s=t.startDate||t.endDate;const e=t.endDate||t.startDate;
+    return s&&e>=winStartStr&&s<=winEndStr;
+  }).sort((a,b)=>(a.startDate||a.endDate||'').localeCompare(b.startDate||b.endDate||''));
+
+  const headerH=57; // month (28) + day (29)
+  return (
+    <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+      {/* Toolbar */}
+      <div style={{padding:'9px 16px',display:'flex',alignItems:'center',gap:8,borderBottom:'1px solid var(--border)',flexShrink:0}}>
+        <select className="input" style={{width:175}} value={ganttList} onChange={e=>setGanttList(e.target.value)}>
+          <option value="all">Totes les llistes</option>
+          {lists.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
+        </select>
+        <button className="btn btn-ghost" style={{padding:'5px 10px',fontSize:12}} onClick={()=>setOffset(o=>o-30)}>← Anterior</button>
+        <button className="btn btn-ghost" style={{padding:'5px 10px',fontSize:12}} onClick={()=>setOffset(0)}>Avui</button>
+        <button className="btn btn-ghost" style={{padding:'5px 10px',fontSize:12}} onClick={()=>setOffset(o=>o+30)}>Següent →</button>
+        <span style={{marginLeft:'auto',fontSize:11,color:'var(--text3)'}}>{visibleTasks.length} tasques</span>
+      </div>
+
+      {/* Body: scrollable */}
+      <div style={{flex:1,overflow:'auto',position:'relative'}}>
+        <div style={{minWidth:LABEL_W+DAYS*DAY_W}}>
+
+          {/* Sticky header */}
+          <div style={{position:'sticky',top:0,zIndex:5,display:'flex',background:'var(--bg)'}}>
+            {/* Corner */}
+            <div style={{width:LABEL_W,minWidth:LABEL_W,flexShrink:0,height:headerH,borderRight:'1px solid var(--border)',borderBottom:'1px solid var(--border)',position:'sticky',left:0,zIndex:6,background:'var(--bg)',display:'flex',alignItems:'center',padding:'0 10px',fontSize:10,fontWeight:600,color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.06em'}}>
+              Tasca
+            </div>
+            {/* Months + days */}
+            <div style={{display:'flex',flexDirection:'column',flex:1}}>
+              {/* Month row */}
+              <div style={{display:'flex',height:28,borderBottom:'1px solid var(--border)'}}>
+                {months.map((m,i)=>(
+                  <div key={i} style={{width:m.count*DAY_W,flexShrink:0,borderRight:'1px solid var(--border)',fontSize:10,fontWeight:700,color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.04em',padding:'0 8px',display:'flex',alignItems:'center',overflow:'hidden'}}>
+                    {m.label}
+                  </div>
+                ))}
+              </div>
+              {/* Day row */}
+              <div style={{display:'flex',height:29,borderBottom:'1px solid var(--border)'}}>
+                {days.map((day,i)=>(
+                  <div key={i} style={{
+                    width:DAY_W,flexShrink:0,textAlign:'center',
+                    borderRight:'1px solid var(--border)',
+                    background:day.isToday?'rgba(79,142,247,.1)':day.isWeekend?'var(--bg2)':'transparent',
+                    color:day.isToday?'var(--accent)':day.isWeekend?'var(--text3)':'var(--text2)',
+                    fontSize:9,fontWeight:day.isToday?700:400,
+                    display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:1
+                  }}>
+                    <span>{day.d.getDate()}</span>
+                    <span style={{opacity:.6}}>{day.d.toLocaleDateString('ca-ES',{weekday:'narrow'})}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Rows */}
+          {visibleTasks.length===0 ? (
+            <div style={{display:'flex'}}>
+              <div style={{width:LABEL_W,minWidth:LABEL_W,flexShrink:0,position:'sticky',left:0,background:'var(--bg)',zIndex:3,borderRight:'1px solid var(--border)'}}/>
+              <div className="empty-state" style={{flex:1,padding:'50px 20px'}}>{Ic.calendar}<p>Cap tasca amb dates en aquest període.</p></div>
+            </div>
+          ) : visibleTasks.map((t,ti)=>{
+            const list=lists.find(l=>l.id===t.listId);
+            const color=list?.color||'#4f8ef7';
+            const s=t.startDate||t.endDate;
+            const e=t.endDate||t.startDate;
+            const si=dayIdx(s),ei=dayIdx(e);
+            const barLeft=Math.max(0,si)*DAY_W+2;
+            const barW=Math.max(DAY_W-4,(Math.min(DAYS-1,ei)-Math.max(0,si)+1)*DAY_W-4);
+            const isSelected=selectedTask?.id===t.id;
+            const isDone=t.status==='completada';
+            return (
+              <div key={t.id} style={{display:'flex',height:ROW_H,borderBottom:'1px solid var(--border)',cursor:'pointer'}}
+                onClick={()=>onSelectTask(t===selectedTask?null:t)}>
+                {/* Label */}
+                <div style={{
+                  width:LABEL_W,minWidth:LABEL_W,flexShrink:0,display:'flex',alignItems:'center',gap:7,padding:'0 10px',
+                  position:'sticky',left:0,zIndex:3,
+                  background:isSelected?'rgba(79,142,247,.08)':list?hexToRgba(color,.06):'var(--bg)',
+                  borderRight:'1px solid var(--border)',overflow:'hidden',transition:'background .1s'
+                }}>
+                  <span style={{width:7,height:7,borderRadius:'50%',background:color,flexShrink:0}}/>
+                  <span style={{fontSize:11,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',opacity:isDone?.45:1,fontWeight:isSelected?600:400}}>{t.title}</span>
+                </div>
+                {/* Timeline */}
+                <div style={{flex:1,position:'relative',background:ti%2===0?'transparent':'rgba(0,0,0,.013)'}}>
+                  {/* Weekend cols */}
+                  {days.map((day,di)=>day.isWeekend?(
+                    <div key={di} style={{position:'absolute',top:0,left:di*DAY_W,width:DAY_W,height:'100%',background:'var(--bg2)',opacity:.45,pointerEvents:'none'}}/>
+                  ):null)}
+                  {/* Today line */}
+                  {todayIdx>=0&&(
+                    <div style={{position:'absolute',top:0,left:todayIdx*DAY_W+DAY_W/2-1,width:2,height:'100%',background:'var(--accent)',opacity:.3,pointerEvents:'none'}}/>
+                  )}
+                  {/* Bar */}
+                  {si<=DAYS-1&&ei>=0&&(
+                    <div style={{
+                      position:'absolute',left:barLeft,top:7,width:barW,height:24,
+                      background:isDone?'var(--bg3)':hexToRgba(color,.82),
+                      borderRadius:5,border:`1.5px solid ${isDone?'var(--border)':color}`,
+                      display:'flex',alignItems:'center',padding:'0 7px',overflow:'hidden',
+                      opacity:isDone?.45:1,
+                      boxShadow:isSelected?`0 0 0 2px ${color}`:undefined,
+                      transition:'box-shadow .1s'
+                    }}>
+                      {barW>55&&<span style={{fontSize:10,fontWeight:500,color:'white',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',textShadow:'0 1px 3px rgba(0,0,0,.45)'}}>
+                        {t.title}
+                      </span>}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
