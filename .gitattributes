@@ -1,0 +1,12 @@
+# Normalitza tots els finals de línia de text a LF dins del repositori
+* text=auto eol=lf
+
+# Fitxers binaris: no tocar
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.woff  binary
+*.woff2 binary

@@ -7,6 +7,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
@@ -24,6 +25,7 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const auth = firebase.auth();
+    const storage = firebase.storage();
     // Client ID OAuth de Google (Google Cloud Console > Credencials > ID de client OAuth 2.0, tipus "Aplicació web")
     // Cal habilitar la "Google Calendar API" al projecte i afegir l'origen (URL de l'app) a "Orígens autoritzats de JavaScript"
     const GOOGLE_CLIENT_ID = "887341396041-6b8uo2dl9u39o5os1gba2llbbvp6i2ss.apps.googleusercontent.com";
@@ -1406,6 +1408,45 @@ function DetailPanel({task,lists,defaultFields,onUpdate,onDelete,onClose,onDelay
   const customFields = list?.fields||[];
   const customValues = local.customValues||{};
   const setCustomValue = (fid,val) => push({customValues:{...customValues,[fid]:val}});
+  // Adjuncions (Firebase Storage)
+  const fileRef = useRef(null);
+  const [uploading,setUploading] = useState(false);
+  const [uploadErr,setUploadErr] = useState('');
+  const commit = patch => { const u={...local,...patch}; setLocal(u); clearTimeout(timer.current); onUpdate(u); };
+  const ALLOWED = ['application/pdf','image/jpeg','image/jpg','image/png','image/webp','image/heic'];
+  const MAX_BYTES = 25*1024*1024; // 25 MB per fitxer
+  const fmtSize = b => b<1024?b+' B':b<1048576?(b/1024).toFixed(0)+' KB':(b/1048576).toFixed(1)+' MB';
+  const uploadFiles = async fileList => {
+    const files = Array.from(fileList||[]); if(!files.length) return;
+    setUploadErr(''); setUploading(true);
+    try {
+      const u = auth.currentUser;
+      const added = [];
+      for (const f of files) {
+        if (ALLOWED.length && !ALLOWED.includes(f.type) && !/\.(pdf|jpe?g|png|webp|heic)$/i.test(f.name)) {
+          setUploadErr(`"${f.name}" no es un PDF ni una imatge.`); continue;
+        }
+        if (f.size>MAX_BYTES) { setUploadErr(`"${f.name}" supera els 25 MB.`); continue; }
+        const aid = uid();
+        const safe = f.name.replace(/[^\w.\-]+/g,'_');
+        const path = `attachments/${u.uid}/${local.id}/${aid}_${safe}`;
+        const ref = storage.ref(path);
+        await ref.put(f);
+        const url = await ref.getDownloadURL();
+        added.push({id:aid,name:f.name,url,path,type:f.type,size:f.size});
+      }
+      if (added.length) commit({attachments:[...(local.attachments||[]),...added]});
+    } catch(err) {
+      setUploadErr('Error en pujar: '+(err.code||err.message||err));
+    }
+    setUploading(false);
+    if (fileRef.current) fileRef.current.value='';
+  };
+  const removeAttachment = async att => {
+    if (att.path) { try { await storage.ref(att.path).delete(); } catch(e){/* ja esborrat o sense permis */} }
+    commit({attachments:(local.attachments||[]).filter(a=>a.id!==att.id)});
+  };
+  const isImg = att => (att.type||'').startsWith('image/') || /\.(jpe?g|png|webp|heic|gif)$/i.test(att.name||'');
   return (
     <div className="detail-panel">
       <div className="detail-header">
@@ -1570,6 +1611,30 @@ function DetailPanel({task,lists,defaultFields,onUpdate,onDelete,onClose,onDelay
               </div>
             ))}
             <button className="add-subtask-btn" onClick={addSubtask}>{Ic.plus} Afegir subtasca</button>
+          </div>
+        </div>
+        <div className="detail-field">
+          <label>Adjuncions ({(local.attachments||[]).length})</label>
+          <div style={{display:'flex',flexDirection:'column',gap:6}}>
+            {(local.attachments||[]).map(att=>(
+              <div key={att.id} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 8px',background:'var(--bg2)',borderRadius:8,fontSize:12}}>
+                {isImg(att)
+                  ? <img src={att.url} alt="" style={{width:34,height:34,objectFit:'cover',borderRadius:6,flexShrink:0}}/>
+                  : <span style={{width:34,height:34,display:'flex',alignItems:'center',justifyContent:'center',background:'var(--card)',borderRadius:6,flexShrink:0,fontSize:11,fontWeight:700,color:'var(--text2)'}}>PDF</span>}
+                <a href={att.url} target="_blank" rel="noopener noreferrer"
+                  style={{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:'var(--accent)',textDecoration:'none'}}
+                  title={att.name}>{att.name}</a>
+                {att.size>0&&<span style={{color:'var(--text3)',flexShrink:0}}>{fmtSize(att.size)}</span>}
+                <span onClick={()=>removeAttachment(att)} title="Eliminar adjuncio"
+                  style={{color:'var(--text3)',cursor:'pointer',flexShrink:0,fontSize:15,lineHeight:1,padding:'0 2px'}}>×</span>
+              </div>
+            ))}
+            <input ref={fileRef} type="file" accept=".pdf,image/jpeg,image/png,image/webp,application/pdf" multiple
+              style={{display:'none'}} onChange={e=>uploadFiles(e.target.files)}/>
+            <button className="add-subtask-btn" disabled={uploading} onClick={()=>fileRef.current&&fileRef.current.click()}>
+              {uploading?'Pujant…':<>{Ic.plus} Adjuntar PDF o imatge</>}
+            </button>
+            {uploadErr&&<div style={{fontSize:11,color:'var(--danger)'}}>{uploadErr}</div>}
           </div>
         </div>
       </div>
