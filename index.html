@@ -1045,7 +1045,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v3.3</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v3.4</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -1379,7 +1379,7 @@ function TaskItem({task,lists,selected,onClick,onToggle,onDelete,onDelay,onTrack
           <button className="delay-btn" title="Endarrerir 1 hora" onClick={e=>{e.stopPropagation();onDelay(task,'1h');}}>+1h</button>
           <button className="delay-btn" title="Endarrerir 1 dia"  onClick={e=>{e.stopPropagation();onDelay(task,'1d');}}>+1d</button>
         </>}
-        <button className="btn btn-danger-soft btn-icon" style={{flexShrink:0}} onClick={e=>{e.stopPropagation();onDelete();}}>{Ic.trash}</button>
+        {onDelete&&<button className="btn btn-danger-soft btn-icon" style={{flexShrink:0}} onClick={e=>{e.stopPropagation();onDelete();}}>{Ic.trash}</button>}
       </div>
     </div>
   );
@@ -1411,7 +1411,7 @@ function DetailPanel({task,lists,defaultFields,onUpdate,onDelete,onClose,onDelay
       <div className="detail-header">
         <h3>Detall</h3>
         <div style={{display:'flex',gap:6}}>
-          <button className="btn btn-danger-soft btn-icon" onClick={onDelete}>{Ic.trash}</button>
+          {onDelete&&<button className="btn btn-danger-soft btn-icon" onClick={onDelete}>{Ic.trash}</button>}
           <button className="btn btn-ghost btn-icon" onClick={onClose}>{Ic.x}</button>
         </div>
       </div>
