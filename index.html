@@ -852,6 +852,11 @@ function App() {
     await db.collection('tasks').doc(id).delete();
     if (selectedTask?.id===id) setSelectedTask(null);
   };
+  const canDeleteTask = task => {
+    const list = lists.find(l=>l.id===task?.listId);
+    if (!list) return true;
+    return list.ownerId===user.uid;
+  };
   const requestDelete = task => {
     if (task.seriesId) setDeleteConfirm(task);
     else deleteTask(task.id);
@@ -1040,7 +1045,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v3.2</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v3.3</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -1260,7 +1265,7 @@ function App() {
                     </div>
                     {grpTasks.map(t=><TaskItem key={t.id} task={t} lists={lists}
                       selected={selectedTask?.id===t.id} onClick={()=>setSelectedTask(t)}
-                      onToggle={()=>toggleStatus(t.id,t.status)} onDelete={()=>requestDelete(t)}
+                      onToggle={()=>toggleStatus(t.id,t.status)} onDelete={canDeleteTask(t)?()=>requestDelete(t):null}
                       onDelay={(task,type)=>delayTask(task,type)} onTrack={toggleTrack}/>)}
                   </div>
                 );
@@ -1273,7 +1278,7 @@ function App() {
                 </div>
                 {completades.map(t=><TaskItem key={t.id} task={t} lists={lists}
                   selected={selectedTask?.id===t.id} onClick={()=>setSelectedTask(t)}
-                  onToggle={()=>toggleStatus(t.id,t.status)} onDelete={()=>deleteTask(t.id)}
+                  onToggle={()=>toggleStatus(t.id,t.status)} onDelete={canDeleteTask(t)?()=>deleteTask(t.id):null}
                   onDelay={(task,type)=>delayTask(task,type)} onTrack={toggleTrack}/>)}
               </>}
             </div>
@@ -1283,7 +1288,7 @@ function App() {
 
         {selectedTask&&(
           <DetailPanel task={selectedTask} lists={lists} defaultFields={defaultFields}
-            onUpdate={updateTask} onDelete={()=>requestDelete(selectedTask)}
+            onUpdate={updateTask} onDelete={canDeleteTask(selectedTask)?()=>requestDelete(selectedTask):null}
             onClose={()=>setSelectedTask(null)} onDelay={delayTask}/>
         )}
       </div>
