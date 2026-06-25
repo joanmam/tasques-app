@@ -206,6 +206,7 @@
     .subtask-check.checked{background:var(--success);border-color:var(--success)}
     .subtask-check.checked::after{content:'✓';color:white;font-size:9px;line-height:1;display:flex;align-items:center;justify-content:center}
     .add-subtask-btn{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--accent);cursor:pointer;background:none;border:none;font-family:inherit;padding:4px 0}
+    .add-subtask-btn svg{width:14px;height:14px;flex-shrink:0}
     .add-subtask-btn:hover{opacity:.8}
     .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(4px)}
     .modal{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;width:500px;max-width:95vw;display:flex;flex-direction:column;gap:14px;box-shadow:0 20px 60px rgba(0,0,0,.15);max-height:90vh;overflow-y:auto}
@@ -1600,20 +1601,6 @@ function DetailPanel({task,lists,defaultFields,onUpdate,onDelete,onClose,onDelay
           </div>
         </div>
         <div className="detail-field">
-          <label>Subtasques ({(local.subtasks||[]).filter(s=>s.done).length}/{(local.subtasks||[]).length})</label>
-          <div className="subtask-editor">
-            {(local.subtasks||[]).map(s=>(
-              <div key={s.id} className="subtask-row">
-                <div className={`subtask-check ${s.done?'checked':''}`} onClick={()=>updSubtask(s.id,{done:!s.done})}/>
-                <input value={s.title} placeholder="Subtasca..." onChange={e=>updSubtask(s.id,{title:e.target.value})}
-                  style={s.done?{textDecoration:'line-through',opacity:.5}:{}}/>
-                <span className="del" onClick={()=>delSubtask(s.id)}>×</span>
-              </div>
-            ))}
-            <button className="add-subtask-btn" onClick={addSubtask}>{Ic.plus} Afegir subtasca</button>
-          </div>
-        </div>
-        <div className="detail-field">
           <label>Adjuncions ({(local.attachments||[]).length})</label>
           <div style={{display:'flex',flexDirection:'column',gap:6}}>
             {(local.attachments||[]).map(att=>(
@@ -1635,6 +1622,20 @@ function DetailPanel({task,lists,defaultFields,onUpdate,onDelete,onClose,onDelay
               {uploading?'Pujant…':<>{Ic.plus} Adjuntar PDF o imatge</>}
             </button>
             {uploadErr&&<div style={{fontSize:11,color:'var(--danger)'}}>{uploadErr}</div>}
+          </div>
+        </div>
+        <div className="detail-field">
+          <label>Subtasques ({(local.subtasks||[]).filter(s=>s.done).length}/{(local.subtasks||[]).length})</label>
+          <div className="subtask-editor">
+            {(local.subtasks||[]).map(s=>(
+              <div key={s.id} className="subtask-row">
+                <div className={`subtask-check ${s.done?'checked':''}`} onClick={()=>updSubtask(s.id,{done:!s.done})}/>
+                <input value={s.title} placeholder="Subtasca..." onChange={e=>updSubtask(s.id,{title:e.target.value})}
+                  style={s.done?{textDecoration:'line-through',opacity:.5}:{}}/>
+                <span className="del" onClick={()=>delSubtask(s.id)}>×</span>
+              </div>
+            ))}
+            <button className="add-subtask-btn" onClick={addSubtask}>{Ic.plus} Afegir subtasca</button>
           </div>
         </div>
       </div>
