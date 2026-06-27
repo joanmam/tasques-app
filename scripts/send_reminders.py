@@ -65,17 +65,26 @@ def main():
     tasks = db.collection("tasks").where("reminderMinutes", ">", 0).stream()
     for t in tasks:
         d = t.to_dict()
-        if d.get("status") == "completada" or not d.get("endDate"):
+        if d.get("status") == "completada":
             continue
         mins = int(d.get("reminderMinutes") or 0)
         if mins <= 0:
             continue
-        end_time = d.get("endTime") or "23:59"
+        # El recordatori es calcula respecte a l'INICI de la tasca.
+        # Si no hi ha data d'inici, es fa servir la de fi com a alternativa.
+        if d.get("startDate"):
+            base_date = d["startDate"]
+            base_time = d.get("startTime") or "09:00"
+        elif d.get("endDate"):
+            base_date = d["endDate"]
+            base_time = d.get("endTime") or "23:59"
+        else:
+            continue
         try:
-            end_dt = datetime.fromisoformat(f"{d['endDate']}T{end_time}").replace(tzinfo=TZ)
+            base_dt = datetime.fromisoformat(f"{base_date}T{base_time}").replace(tzinfo=TZ)
         except ValueError:
             continue
-        rem_dt = end_dt - timedelta(minutes=mins)
+        rem_dt = base_dt - timedelta(minutes=mins)
         diff = (now - rem_dt).total_seconds()
         if not (0 <= diff < WINDOW_MIN * 60):
             continue

@@ -377,6 +377,29 @@ async function subscribeToPush(uid, email) {
   });
   return sub;
 }
+async function unsubscribeFromPush(uid) {
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (reg) {
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) await sub.unsubscribe();
+    }
+  } catch (e) {}
+  try { await db.collection('pushSubscriptions').doc(uid).delete(); } catch (e) {}
+}
+async function isPushActive() {
+  if (!pushSupported() || Notification.permission !== 'granted') return false;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) return false;
+    const sub = await reg.pushManager.getSubscription();
+    return !!sub;
+  } catch (e) { return false; }
+}
+// Registra el service worker a l'arrencada: cau network-first + detectar estat de notificacions
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
+}
 
 const REMINDER_OPTIONS = [
   {value:0,label:'Sense recordatori'},
@@ -639,6 +662,8 @@ function App() {
     if (user?.uid) await db.collection('userSettings').doc(user.uid).set({gcalCalendars:cals},{merge:true});
   };
   const [showModal,setShowModal]         = useState(false);
+  const [pushOn,setPushOn]               = useState(false);
+  useEffect(()=>{ let alive=true; isPushActive().then(on=>{ if(alive) setPushOn(on); }); return ()=>{alive=false;}; }, [user]);
   const [voiceListening,setVoiceListening] = useState(false);
   const [voicePreFill,setVoicePreFill]   = useState(null);
   const [sidebarOpen,setSidebarOpen] = useState(false);
@@ -1092,7 +1117,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v4.2</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v4.3</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -1105,15 +1130,28 @@ function App() {
               <span className="sidebar-user-name" title={user.email}>{user.email}</span>
             </div>
             <button className="btn-logout" onClick={()=>auth.signOut()}>{Ic.logout} Tancar sessió</button>
-            <button className="btn-logout" style={{marginTop:6}} onClick={async()=>{
-              try {
+            <button className="btn-logout" style={{marginTop:6,justifyContent:'space-between',
+                color:pushOn?'var(--success)':'var(--text2)',
+                borderColor:pushOn?'var(--success)':'var(--border)',
+                background:pushOn?'rgba(79,190,150,.10)':'transparent'}}
+              onClick={async()=>{
                 if(!pushSupported()){ showToast('⚠ Aquest navegador no admet notificacions push'); return; }
-                await subscribeToPush(user.uid, user.email);
-                showToast('✓ Notificacions del mòbil activades');
-              } catch(err){
-                showToast(err.message==='denied' ? '⚠ Has de permetre les notificacions al navegador' : '⚠ No s\'han pogut activar les notificacions');
-              }
-            }}>{Ic.bell} Activa notificacions al mòbil</button>
+                if(pushOn){
+                  try { await unsubscribeFromPush(user.uid); setPushOn(false); showToast('Notificacions desactivades'); }
+                  catch(err){ showToast('⚠ No s\'han pogut desactivar les notificacions'); }
+                } else {
+                  try {
+                    await subscribeToPush(user.uid, user.email);
+                    setPushOn(true);
+                    showToast('✓ Notificacions activades');
+                  } catch(err){
+                    showToast(err.message==='denied' ? '⚠ Has de permetre les notificacions al navegador' : '⚠ No s\'han pogut activar les notificacions');
+                  }
+                }
+              }}>
+              <span style={{display:'inline-flex',alignItems:'center',gap:7}}>{Ic.bell} {pushOn?'Notificacions actives':'Notificacions desactivades'}</span>
+              <span style={{fontSize:10,fontWeight:700,padding:'2px 7px',borderRadius:10,background:pushOn?'var(--success)':'var(--bg3)',color:pushOn?'#fff':'var(--text3)'}}>{pushOn?'ON':'OFF'}</span>
+            </button>
           </div>
           <div className="sidebar-section">
             <SidebarItem icon={Ic.inbox} label="Totes" count={tasks.filter(t=>t.status!=='completada').length}
