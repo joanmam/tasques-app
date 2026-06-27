@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Secrets (mai pujar aquests fitxers)
+service-account.json
+vapid_keys.json
+*service-account*.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

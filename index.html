@@ -4,6 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tasques</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#4f8ef7" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Tasques" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -334,6 +340,39 @@ const RECURRENCE_OPTIONS = [
   {value:'weekly',label:'Setmanalment'},
   {value:'monthly',label:'Mensualment'},
 ];
+// ── Notificacions push (Web Push + VAPID) ──────────────────────────────────
+const VAPID_PUBLIC_KEY = 'BIPqnC-UD_KutAs0wlpackJLHEfbsORT0Ra-DUDWbNd9bXTqpO23o6whWeIwbgsP3ySst_NYfHLfxCdpiCaYRLE';
+const urlBase64ToUint8Array = (b64) => {
+  const padding = '='.repeat((4 - b64.length % 4) % 4);
+  const base64 = (b64 + padding).replace(/-/g,'+').replace(/_/g,'/');
+  const raw = atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for (let i=0;i<raw.length;i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+};
+const pushSupported = () => ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
+async function subscribeToPush(uid, email) {
+  if (!pushSupported()) throw new Error('unsupported');
+  const reg = await navigator.serviceWorker.register('sw.js');
+  await navigator.serviceWorker.ready;
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') throw new Error('denied');
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) {
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+  }
+  await db.collection('pushSubscriptions').doc(uid).set({
+    uid, email: email||'',
+    subscription: JSON.parse(JSON.stringify(sub)),
+    userAgent: navigator.userAgent,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  return sub;
+}
+
 const REMINDER_OPTIONS = [
   {value:0,label:'Sense recordatori'},
   {value:5,label:'5 minuts abans'},
@@ -794,7 +833,7 @@ function App() {
       setVoiceListening(false);
       const transcript = e.results[0][0].transcript;
       const parsed = parseVoiceInput(transcript);
-      const inboxList = lists.find(l=>l.name.toLowerCase()==='inbox');
+      const inboxList = lists.find(l=>(l.name||'').trim().toLowerCase()==='inbox');
       const listId = inboxList ? inboxList.id : (lists[0]?.id||'');
       setVoicePreFill({...parsed, title: parsed.title||transcript, listId});
       setShowModal(true);
@@ -1048,7 +1087,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v3.4</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v3.8</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -1061,6 +1100,15 @@ function App() {
               <span className="sidebar-user-name" title={user.email}>{user.email}</span>
             </div>
             <button className="btn-logout" onClick={()=>auth.signOut()}>{Ic.logout} Tancar sessió</button>
+            <button className="btn-logout" style={{marginTop:6}} onClick={async()=>{
+              try {
+                if(!pushSupported()){ showToast('⚠ Aquest navegador no admet notificacions push'); return; }
+                await subscribeToPush(user.uid, user.email);
+                showToast('✓ Notificacions del mòbil activades');
+              } catch(err){
+                showToast(err.message==='denied' ? '⚠ Has de permetre les notificacions al navegador' : '⚠ No s\'han pogut activar les notificacions');
+              }
+            }}>{Ic.bell} Activa notificacions al mòbil</button>
           </div>
           <div className="sidebar-section">
             <SidebarItem icon={Ic.inbox} label="Totes" count={tasks.filter(t=>t.status!=='completada').length}
