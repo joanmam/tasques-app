@@ -1087,7 +1087,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v3.8</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v3.9</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -1353,7 +1353,7 @@ function App() {
       {showDefaultFields&&<DefaultFieldsModal fields={defaultFields} onSave={saveDefaultFields} onClose={()=>setShowDefaultFields(false)}/>}
       {showGcalSettings&&<GcalSettingsModal calendars={gcalCalendars} onSave={cals=>{saveGcalCalendars(cals);setShowGcalSettings(false);}} onClose={()=>setShowGcalSettings(false)}/>}
       {deleteConfirm&&<DeleteSeriesModal task={deleteConfirm} onConfirm={mode=>deleteSeries(deleteConfirm,mode)} onClose={()=>setDeleteConfirm(null)}/>}
-      {toast&&<div className="toast"><span style={{color:'var(--success)',fontSize:15}}>✓</span>{toast.replace('✓ ','')}</div>}
+      {toast&&(()=>{const warn=/^⚠/.test(toast);const txt=toast.replace(/^[✓⚠]\s*/,'');return <div className="toast"><span style={{color:warn?'var(--warn)':'var(--success)',fontSize:15}}>{warn?'⚠':'✓'}</span>{txt}</div>;})()}
     </>
   );
 }
