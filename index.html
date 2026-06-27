@@ -75,9 +75,11 @@
       .view-btn{padding:5px 9px;font-size:0;gap:0}
       .view-btn span{display:inline-flex!important;width:14px;height:14px}
       .topbar .btn-ghost{flex-shrink:0}
-      .topbar .btn-primary{font-size:0;padding:9px 11px;flex-shrink:0}
-      .topbar .btn-primary svg{width:17px;height:17px}
+      .topbar .btn-primary{display:none}
+      .fab-new{display:flex!important;align-items:center;justify-content:center;position:fixed;right:18px;bottom:calc(20px + env(safe-area-inset-bottom,0px));width:56px;height:56px;border-radius:50%;background:var(--accent);color:#fff;border:none;box-shadow:0 6px 22px rgba(0,0,0,.32);z-index:150;cursor:pointer}
+      .fab-new svg{width:26px;height:26px}
     }
+    .fab-new{display:none}
     .sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:199}
     .hamburger{display:none;background:none;border:none;cursor:pointer;padding:4px 6px;color:var(--text2);font-size:22px;line-height:1;align-items:center;justify-content:center}
     .sidebar-header{padding:16px 16px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
@@ -1090,7 +1092,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v4.0</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v4.1</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
@@ -1221,6 +1223,11 @@ function App() {
               <button className="btn btn-primary" onClick={()=>{setVoicePreFill(null);setShowModal(true);}}>{Ic.plus} Nova tasca</button>
             </>}
           </div>
+
+          {selectedList!=='seguiment' && (
+            <button className="fab-new" title="Nova tasca" aria-label="Nova tasca"
+              onClick={()=>{setVoicePreFill(null);setShowModal(true);}}>{Ic.plus}</button>
+          )}
 
           {selectedList==='seguiment' ? (
             <SeguimentView tasks={tasks} completionLogs={completionLogs} lists={lists}/>
