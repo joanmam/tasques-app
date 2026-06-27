@@ -61,6 +61,29 @@ def main():
             subs[uid] = doc.to_dict().get("subscription") if doc.exists else None
         return subs[uid]
 
+    lists_cache = {}
+    def get_list(list_id):
+        if list_id not in lists_cache:
+            doc = db.collection("lists").document(list_id).get()
+            lists_cache[list_id] = doc.to_dict() if doc.exists else None
+        return lists_cache[list_id]
+
+    def recipients_for(task):
+        # Tots els qui han de rebre el recordatori: propietari de la tasca +
+        # propietari i membres compartits de la llista (si la tasca és d'una llista).
+        uids = set()
+        if task.get("ownerId"):
+            uids.add(task["ownerId"])
+        list_id = task.get("listId")
+        if list_id:
+            ldata = get_list(list_id)
+            if ldata:
+                if ldata.get("ownerId"):
+                    uids.add(ldata["ownerId"])
+                for u in (ldata.get("sharedWith") or []):
+                    uids.add(u)
+        return uids
+
     due = 0
     tasks = db.collection("tasks").where("reminderMinutes", ">", 0).stream()
     for t in tasks:
@@ -89,43 +112,45 @@ def main():
         if not (0 <= diff < WINDOW_MIN * 60):
             continue
 
-        log_id = f"{t.id}_{int(rem_dt.timestamp())}"
-        log_ref = db.collection("pushLog").document(log_id)
-        if log_ref.get().exists:
-            continue
-
-        uid = d.get("ownerId")
-        sub = get_sub(uid) if uid else None
-        if not sub:
-            continue
-
         payload = json.dumps({
             "title": f"⏰ {d.get('title','Tasca')}",
             "body": f"Venç en {reminder_label(mins)}",
             "tag": t.id,
             "url": "./",
         })
-        due += 1
-        if DRY_RUN:
-            print(f"[DRY] {d.get('title')} -> {uid} (rem {rem_dt})")
-            continue
-        try:
-            webpush(
-                subscription_info=sub,
-                data=payload,
-                vapid_private_key=cfg["private"],
-                vapid_claims={"sub": cfg["sub"]},
-            )
-            log_ref.set({"sentAt": firestore.SERVER_TIMESTAMP, "taskId": t.id, "uid": uid})
-            print(f"OK  {d.get('title')} -> {uid}")
-        except WebPushException as e:
-            code = getattr(e.response, "status_code", None)
-            if code in (404, 410):
-                db.collection("pushSubscriptions").document(uid).delete()
-                subs[uid] = None
-                print(f"GONE subscripcio caducada esborrada ({uid})")
-            else:
-                print(f"ERR {d.get('title')}: {e}")
+
+        rem_ts = int(rem_dt.timestamp())
+        # Envia a tots els membres (propietari + compartits de la llista), un per un,
+        # amb control de duplicats independent per usuari.
+        for uid in recipients_for(d):
+            log_id = f"{t.id}_{rem_ts}_{uid}"
+            log_ref = db.collection("pushLog").document(log_id)
+            if log_ref.get().exists:
+                continue
+            sub = get_sub(uid)
+            if not sub:
+                continue
+            due += 1
+            if DRY_RUN:
+                print(f"[DRY] {d.get('title')} -> {uid} (rem {rem_dt})")
+                continue
+            try:
+                webpush(
+                    subscription_info=sub,
+                    data=payload,
+                    vapid_private_key=cfg["private"],
+                    vapid_claims={"sub": cfg["sub"]},
+                )
+                log_ref.set({"sentAt": firestore.SERVER_TIMESTAMP, "taskId": t.id, "uid": uid})
+                print(f"OK  {d.get('title')} -> {uid}")
+            except WebPushException as e:
+                code = getattr(e.response, "status_code", None)
+                if code in (404, 410):
+                    db.collection("pushSubscriptions").document(uid).delete()
+                    subs[uid] = None
+                    print(f"GONE subscripcio caducada esborrada ({uid})")
+                else:
+                    print(f"ERR {d.get('title')}: {e}")
 
     print(f"Fet. Recordatoris dins de finestra: {due}. Hora: {now.isoformat()}")
 
