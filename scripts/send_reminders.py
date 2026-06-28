@@ -1,36 +1,36 @@
 #!/usr/bin/env python3
 """
-Enviador de recordatoris push per a l'app Tasques.
-Llegeix les tasques de Firestore amb recordatori actiu, calcula quines vençen
-dins de la finestra actual i envia una notificacio web push al/s dispositiu/s
-subscrit/s. Pensat per executar-se periodicament des de GitHub Actions.
+Enviador de recordatoris per CORREU ELECTRÒNIC per a l'app Tasques.
+Llegeix les tasques de Firestore amb recordatori actiu, calcula quines toquen
+ara i envia un correu a cada persona implicada (propietari de la tasca + propietari
+i membres de les llistes compartides). Pensat per executar-se periòdicament des de
+GitHub Actions.
 
-Secrets (com a variables d'entorn, via GitHub Secrets):
+Secrets (variables d'entorn, via GitHub Secrets):
     FIREBASE_SERVICE_ACCOUNT  -> contingut JSON del compte de servei de Firebase
-    VAPID_JSON                -> { "public": "...", "private": "...", "sub": "mailto:..." }
+    GMAIL_APP_PASSWORD        -> contrasenya d'aplicació de Gmail (16 caràcters)
+    GMAIL_USER (opcional)     -> adreça Gmail remitent (per defecte joanmam@gmail.com)
 
-Per a proves locals pots posar els fitxers service-account.json i vapid_keys.json
-al mateix directori en comptes de les variables d'entorn.
+Per a proves locals: posa service-account.json en aquest directori i exporta
+GMAIL_APP_PASSWORD (i opcionalment GMAIL_USER).
 """
-import json, os, sys
+import os, sys, json, smtplib, ssl
+from email.message import EmailMessage
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import firebase_admin
-from firebase_admin import credentials, firestore
-from pywebpush import webpush, WebPushException
+from firebase_admin import credentials, firestore, auth
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TZ = ZoneInfo("Europe/Madrid")
 WINDOW_MIN = 25          # ampli per absorbir el retard del cron de GitHub Actions
 DRY_RUN = "--dry-run" in sys.argv
+APP_URL = "https://joanmam.github.io/tasques-app/"
 
-def load_cfg():
-    env = os.environ.get("VAPID_JSON")
-    if env:
-        return json.loads(env)
-    with open(os.path.join(HERE, "vapid_keys.json"), encoding="utf-8") as f:
-        return json.load(f)
+GMAIL_USER = os.environ.get("GMAIL_USER") or "joanmam@gmail.com"
+GMAIL_APP_PASSWORD = (os.environ.get("GMAIL_APP_PASSWORD") or "").replace(" ", "")
+
 
 def init_db():
     env = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
@@ -42,24 +42,31 @@ def init_db():
         firebase_admin.initialize_app(cred)
     return firestore.client()
 
+
 def reminder_label(mins):
-    if mins < 60:   return f"{mins} min"
-    if mins == 60:  return "1 hora"
-    if mins < 1440: return f"{mins // 60} hores"
+    if mins < 60:    return f"{mins} min"
+    if mins == 60:   return "1 hora"
+    if mins < 1440:  return f"{mins // 60} hores"
     if mins == 1440: return "1 dia"
     return f"{mins // 1440} dies"
 
+
 def main():
-    cfg = load_cfg()
     db = init_db()
     now = datetime.now(TZ)
 
-    subs = {}
-    def get_sub(uid):
-        if uid not in subs:
-            doc = db.collection("pushSubscriptions").document(uid).get()
-            subs[uid] = doc.to_dict().get("subscription") if doc.exists else None
-        return subs[uid]
+    if not DRY_RUN and not GMAIL_APP_PASSWORD:
+        print("ERROR: falta el secret GMAIL_APP_PASSWORD")
+        sys.exit(1)
+
+    emails = {}
+    def get_email(uid):
+        if uid not in emails:
+            try:
+                emails[uid] = auth.get_user(uid).email
+            except Exception:
+                emails[uid] = None
+        return emails[uid]
 
     lists_cache = {}
     def get_list(list_id):
@@ -69,8 +76,7 @@ def main():
         return lists_cache[list_id]
 
     def recipients_for(task):
-        # Tots els qui han de rebre el recordatori: propietari de la tasca +
-        # propietari i membres compartits de la llista (si la tasca és d'una llista).
+        # Propietari de la tasca + propietari i membres de la llista (si en té).
         uids = set()
         if task.get("ownerId"):
             uids.add(task["ownerId"])
@@ -84,6 +90,18 @@ def main():
                     uids.add(u)
         return uids
 
+    smtp = {"conn": None}
+    def send_email(to_addr, subject, body):
+        if smtp["conn"] is None:
+            smtp["conn"] = smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ssl.create_default_context())
+            smtp["conn"].login(GMAIL_USER, GMAIL_APP_PASSWORD)
+        msg = EmailMessage()
+        msg["From"] = f"Tasques <{GMAIL_USER}>"
+        msg["To"] = to_addr
+        msg["Subject"] = subject
+        msg.set_content(body)
+        smtp["conn"].send_message(msg)
+
     due = 0
     tasks = db.collection("tasks").where("reminderMinutes", ">", 0).stream()
     for t in tasks:
@@ -93,8 +111,7 @@ def main():
         mins = int(d.get("reminderMinutes") or 0)
         if mins <= 0:
             continue
-        # El recordatori es calcula respecte a l'INICI de la tasca.
-        # Si no hi ha data d'inici, es fa servir la de fi com a alternativa.
+        # El recordatori es calcula respecte a l'INICI de la tasca (o la fi si no hi ha inici).
         if d.get("startDate"):
             base_date = d["startDate"]
             base_time = d.get("startTime") or "09:00"
@@ -112,47 +129,43 @@ def main():
         if not (0 <= diff < WINDOW_MIN * 60):
             continue
 
-        payload = json.dumps({
-            "title": f"⏰ {d.get('title','Tasca')}",
-            "body": f"Venç en {reminder_label(mins)}",
-            "tag": t.id,
-            "url": "./",
-        })
-
         rem_ts = int(rem_dt.timestamp())
-        # Envia a tots els membres (propietari + compartits de la llista), un per un,
-        # amb control de duplicats independent per usuari.
+        title = d.get("title", "Tasca")
+        when = base_dt.strftime("%d/%m/%Y a les %H:%M")
+        subject = f"⏰ Recordatori: {title}"
+        body = (
+            f"La tasca «{title}» comença el {when} (d'aquí {reminder_label(mins)}).\n\n"
+            f"Obre l'app: {APP_URL}\n"
+        )
+
+        # Envia a tots els destinataris, amb control de duplicats independent per persona.
         for uid in recipients_for(d):
             log_id = f"{t.id}_{rem_ts}_{uid}"
             log_ref = db.collection("pushLog").document(log_id)
             if log_ref.get().exists:
                 continue
-            sub = get_sub(uid)
-            if not sub:
+            addr = get_email(uid)
+            if not addr:
                 continue
             due += 1
             if DRY_RUN:
-                print(f"[DRY] {d.get('title')} -> {uid} (rem {rem_dt})")
+                print(f"[DRY] {title} -> {addr}")
                 continue
             try:
-                webpush(
-                    subscription_info=sub,
-                    data=payload,
-                    vapid_private_key=cfg["private"],
-                    vapid_claims={"sub": cfg["sub"]},
-                )
-                log_ref.set({"sentAt": firestore.SERVER_TIMESTAMP, "taskId": t.id, "uid": uid})
-                print(f"OK  {d.get('title')} -> {uid}")
-            except WebPushException as e:
-                code = getattr(e.response, "status_code", None)
-                if code in (404, 410):
-                    db.collection("pushSubscriptions").document(uid).delete()
-                    subs[uid] = None
-                    print(f"GONE subscripcio caducada esborrada ({uid})")
-                else:
-                    print(f"ERR {d.get('title')}: {e}")
+                send_email(addr, subject, body)
+                log_ref.set({"sentAt": firestore.SERVER_TIMESTAMP, "taskId": t.id, "uid": uid, "email": addr})
+                print(f"OK  {title} -> {addr}")
+            except Exception as e:
+                print(f"ERR {title} -> {addr}: {e}")
+
+    if smtp["conn"] is not None:
+        try:
+            smtp["conn"].quit()
+        except Exception:
+            pass
 
     print(f"Fet. Recordatoris dins de finestra: {due}. Hora: {now.isoformat()}")
+
 
 if __name__ == "__main__":
     main()

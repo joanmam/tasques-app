@@ -18,5 +18,5 @@ jobs:
       - name: Enviar recordatoris vençuts
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          VAPID_JSON: ${{ secrets.VAPID_JSON }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
         run: python scripts/send_reminders.py
