@@ -262,6 +262,10 @@
     .cal-day.today .cal-day-num{background:var(--accent);color:white}
     .cal-task-chip{font-size:10px;font-weight:500;padding:2px 6px;border-radius:4px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;transition:opacity .1s}
     .cal-task-chip:hover{opacity:.75}
+    .cal-task-chip-drag{cursor:grab;touch-action:none}
+    .cal-task-chip-drag:active{cursor:grabbing}
+    .cal-day.drag-over{border-color:var(--accent);background:rgba(79,142,247,.14);box-shadow:0 0 0 2px var(--accent) inset}
+    .cal-drag-ghost{position:fixed;z-index:9999;pointer-events:none;transform:translate(-50%,-140%);background:var(--accent);color:#fff;font-size:11px;font-weight:600;padding:4px 8px;border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.3);max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .cal-gcal-chip{background:rgba(79,142,247,.12);color:#4f8ef7;cursor:default}
     .cal-gcal-chip:hover{opacity:1}
     .cal-more{font-size:10px;color:var(--text3);margin-top:2px}
@@ -987,6 +991,21 @@ function App() {
       await db.collection('tasks').doc(task.id).update({endDate:ymd(dt)});
     }
   };
+  // Mou una tasca a una data concreta (arrossegant-la al calendari) sense canviar l'hora.
+  // Manté la durada si la tasca ocupa diversos dies (startDate!=endDate).
+  const moveTaskToDate = async (task, newDateStr) => {
+    const anchor = task.endDate || task.startDate;
+    if (!anchor || newDateStr === anchor) return;
+    const delta = Math.round(
+      (new Date(newDateStr+'T12:00') - new Date(anchor+'T12:00')) / 86400000
+    );
+    if (!delta) return;
+    const shift = d => { const x=new Date(d+'T12:00'); x.setDate(x.getDate()+delta); return ymd(x); };
+    const upd = {};
+    if (task.endDate)   upd.endDate   = shift(task.endDate);
+    if (task.startDate) upd.startDate = shift(task.startDate);
+    await db.collection('tasks').doc(task.id).update(upd);
+  };
   const toggleTrack = async task => {
     const newVal = !task.tracked;
     if (task.seriesId) {
@@ -1342,7 +1361,7 @@ function App() {
                 defaultList={isSpecificList?selectedList:'all'}
                 selectedTask={selectedTask} onSelectTask={setSelectedTask}/>
             ) : view==='calendar' ? (
-              <CalendarView tasks={filtered} lists={lists} selectedTask={selectedTask} onSelectTask={setSelectedTask}
+              <CalendarView tasks={filtered} lists={lists} selectedTask={selectedTask} onSelectTask={setSelectedTask} onMoveTask={moveTaskToDate}
                 gcalToken={gcalToken} gcalEvents={gcalEvents} setGcalEvents={setGcalEvents} gcalError={gcalError} setGcalError={setGcalError} gcalCalendars={gcalCalendars}/>
             ) : view==='matrix' ? (
               <MatrixView tasks={filtered} lists={lists} defaultFields={defaultFields} selectedTask={selectedTask} onSelectTask={setSelectedTask}/>
@@ -1481,10 +1500,12 @@ function TaskItem({task,lists,selected,onClick,onToggle,onDelete,onDelay,onTrack
             {task.tracked?Ic.bmark:Ic.bookmark}
           </button>
         )}
-        {hover&&!done&&<>
+        {hover&&!done&&(
           <button className="delay-btn" title="Endarrerir 1 hora" onClick={e=>{e.stopPropagation();onDelay(task,'1h');}}>+1h</button>
-          <button className="delay-btn" title="Endarrerir 1 dia"  onClick={e=>{e.stopPropagation();onDelay(task,'1d');}}>+1d</button>
-        </>}
+        )}
+        {!done&&(
+          <button className="delay-btn" title="Endarrerir 1 dia" onClick={e=>{e.stopPropagation();onDelay(task,'1d');}}>+1d</button>
+        )}
         {onDelete&&<button className="btn btn-danger-soft btn-icon" style={{flexShrink:0}} onClick={e=>{e.stopPropagation();onDelete();}}>{Ic.trash}</button>}
       </div>
     </div>
@@ -2298,12 +2319,64 @@ function MatrixView({tasks,lists,defaultFields,selectedTask,onSelectTask}) {
 }
 
 // ─── CALENDAR VIEW ────────────────────────────────────────────────────────────
-function CalendarView({tasks,lists,selectedTask,onSelectTask,gcalToken,gcalEvents,setGcalEvents,gcalError,setGcalError,gcalCalendars}) {
+function CalendarView({tasks,lists,selectedTask,onSelectTask,onMoveTask,gcalToken,gcalEvents,setGcalEvents,gcalError,setGcalError,gcalCalendars}) {
   const now = new Date();
   const [year,setYear]   = useState(now.getFullYear());
   const [month,setMonth] = useState(now.getMonth());
   const [popup,setPopup] = useState(null);
   const popupRef = useRef(null);
+  // ── Arrossegar tasques d'un dia a un altre (ratolí + tàctil) ──
+  const dragRef = useRef(null);          // {task, startX, startY, active, ghost}
+  const suppressClickRef = useRef(false); // evita obrir el detall just després d'arrossegar
+  const [dragOverDate,setDragOverDate] = useState(null);
+  const startChipDrag = (e, task) => {
+    if (typeof e.button === 'number' && e.button !== 0) return; // només botó esquerre
+    dragRef.current = {task, startX:e.clientX, startY:e.clientY, active:false, ghost:null};
+    const move = ev => {
+      const d = dragRef.current; if (!d) return;
+      const dx = ev.clientX - d.startX, dy = ev.clientY - d.startY;
+      if (!d.active) {
+        if (Math.hypot(dx,dy) < 6) return; // llindar per no confondre amb un clic
+        d.active = true;
+        const g = document.createElement('div');
+        g.className = 'cal-drag-ghost';
+        g.textContent = task.title || '';
+        document.body.appendChild(g);
+        d.ghost = g;
+        document.body.style.userSelect = 'none';
+      }
+      if (ev.cancelable) ev.preventDefault();
+      d.ghost.style.left = ev.clientX + 'px';
+      d.ghost.style.top  = ev.clientY + 'px';
+      const el = document.elementFromPoint(ev.clientX, ev.clientY);
+      const cell = el && el.closest('[data-datestr]');
+      setDragOverDate(cell ? cell.getAttribute('data-datestr') : null);
+    };
+    const finish = ev => {
+      const d = dragRef.current;
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+      document.body.style.userSelect = '';
+      if (d) {
+        if (d.ghost) d.ghost.remove();
+        if (d.active) {
+          suppressClickRef.current = true;
+          if (ev.type === 'pointerup') {
+            const el = document.elementFromPoint(ev.clientX, ev.clientY);
+            const cell = el && el.closest('[data-datestr]');
+            const ds = cell && cell.getAttribute('data-datestr');
+            if (ds && onMoveTask) onMoveTask(d.task, ds);
+          }
+        }
+      }
+      dragRef.current = null;
+      setDragOverDate(null);
+    };
+    window.addEventListener('pointermove', move, {passive:false});
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+  };
   useEffect(()=>{
     const h = e => {if(popupRef.current&&!popupRef.current.contains(e.target))setPopup(null);};
     document.addEventListener('mousedown',h);
@@ -2362,16 +2435,18 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask,gcalToken,gcalEvent
           const extra = extraTasks + (dayGcal.length-gcalVisible.length);
           const isPopup  = popup?.dateStr===dateStr;
           return (
-            <div key={dateStr} className={`cal-day ${isToday?'today':''} ${!inMonth?'other-month':''}`}
+            <div key={dateStr} data-datestr={dateStr}
+              className={`cal-day ${isToday?'today':''} ${!inMonth?'other-month':''} ${dragOverDate===dateStr?'drag-over':''}`}
               onClick={()=>(dayTasks.length>0||dayGcal.length>0)&&setPopup(isPopup?null:{dateStr})}>
               <div className="cal-day-num">{date.getDate()}</div>
               {visible.map(t=>{
                 const list=lists.find(l=>l.id===t.listId);
                 const overdue=isOverdue(t);
                 const color=overdue?'var(--danger)':(list?.color||'var(--accent)');
-                return <div key={t.id} className="cal-task-chip"
+                return <div key={t.id} className="cal-task-chip cal-task-chip-drag"
                   style={{background:color+'22',color}}
-                  onClick={e=>{e.stopPropagation();onSelectTask(t);setPopup(null);}}
+                  onPointerDown={e=>startChipDrag(e,t)}
+                  onClick={e=>{e.stopPropagation(); if(suppressClickRef.current){suppressClickRef.current=false;return;} onSelectTask(t);setPopup(null);}}
                   title={t.title}>{t.status==='completada'?'✓ ':overdue?'⚠ ':''}{t.title}</div>;
               })}
               {gcalVisible.map((e,i)=>(
