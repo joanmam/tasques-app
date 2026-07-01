@@ -200,6 +200,8 @@
     .detail-date:focus{border-color:var(--accent)}
     .detail-input{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;padding:7px 10px;outline:none}
     .detail-input:focus{border-color:var(--accent)}
+    .att-title-input{width:100%;background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-weight:600;font-family:inherit;padding:4px 7px;outline:none}
+    .att-title-input:focus{border-color:var(--accent)}
     .detail-checkbox{width:16px;height:16px;cursor:pointer;accent-color:var(--accent)}
     .custom-fields-section{border-top:1px solid var(--border);padding-top:12px}
     .custom-fields-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
@@ -1568,7 +1570,7 @@ function DetailPanel({task,lists,defaultFields,onUpdate,onDelete,onClose,onDelay
         const ref = storage.ref(path);
         await ref.put(f);
         const url = await ref.getDownloadURL();
-        added.push({id:aid,name:f.name,url,path,type:f.type,size:f.size});
+        added.push({id:aid,name:f.name,title:f.name,url,path,type:f.type,size:f.size});
       }
       if (added.length) commit({attachments:[...(local.attachments||[]),...added]});
     } catch(err) {
@@ -1581,6 +1583,8 @@ function DetailPanel({task,lists,defaultFields,onUpdate,onDelete,onClose,onDelay
     if (att.path) { try { await storage.ref(att.path).delete(); } catch(e){/* ja esborrat o sense permis */} }
     commit({attachments:(local.attachments||[]).filter(a=>a.id!==att.id)});
   };
+  const renameAttachment = (att, title) =>
+    push({attachments:(local.attachments||[]).map(a=>a.id===att.id?{...a,title}:a)});
   const isImg = att => (att.type||'').startsWith('image/') || /\.(jpe?g|png|webp|heic|gif)$/i.test(att.name||'');
   return (
     <div className="detail-panel">
@@ -1739,13 +1743,20 @@ function DetailPanel({task,lists,defaultFields,onUpdate,onDelete,onClose,onDelay
           <div style={{display:'flex',flexDirection:'column',gap:6}}>
             {(local.attachments||[]).map(att=>(
               <div key={att.id} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 8px',background:'var(--bg2)',borderRadius:8,fontSize:12}}>
-                {isImg(att)
-                  ? <img src={att.url} alt="" style={{width:34,height:34,objectFit:'cover',borderRadius:6,flexShrink:0}}/>
-                  : <span style={{width:34,height:34,display:'flex',alignItems:'center',justifyContent:'center',background:'var(--card)',borderRadius:6,flexShrink:0,fontSize:11,fontWeight:700,color:'var(--text2)'}}>PDF</span>}
-                <a href={att.url} target="_blank" rel="noopener noreferrer"
-                  style={{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:'var(--accent)',textDecoration:'none'}}
-                  title={att.name}>{att.name}</a>
-                {att.size>0&&<span style={{color:'var(--text3)',flexShrink:0}}>{fmtSize(att.size)}</span>}
+                <a href={att.url} target="_blank" rel="noopener noreferrer" title="Obrir document" style={{flexShrink:0,display:'flex'}}>
+                  {isImg(att)
+                    ? <img src={att.url} alt="" style={{width:34,height:34,objectFit:'cover',borderRadius:6}}/>
+                    : <span style={{width:34,height:34,display:'flex',alignItems:'center',justifyContent:'center',background:'var(--card)',borderRadius:6,fontSize:11,fontWeight:700,color:'var(--text2)'}}>PDF</span>}
+                </a>
+                <div style={{flex:1,minWidth:0,display:'flex',flexDirection:'column',gap:2}}>
+                  <input className="att-title-input" value={att.title??att.name??''} placeholder={att.name||'Títol del document'}
+                    onChange={e=>renameAttachment(att,e.target.value)} title="Edita el títol del document"/>
+                  <div style={{display:'flex',gap:5,alignItems:'center',color:'var(--text3)',fontSize:10,overflow:'hidden'}}>
+                    <a href={att.url} target="_blank" rel="noopener noreferrer" title={att.name}
+                      style={{color:'var(--text3)',textDecoration:'none',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{att.name}</a>
+                    {att.size>0&&<span style={{flexShrink:0}}>· {fmtSize(att.size)}</span>}
+                  </div>
+                </div>
                 <span onClick={()=>removeAttachment(att)} title="Eliminar adjuncio"
                   style={{color:'var(--text3)',cursor:'pointer',flexShrink:0,fontSize:15,lineHeight:1,padding:'0 2px'}}>×</span>
               </div>
