@@ -253,6 +253,16 @@
     .cal-nav-btn{padding:6px 10px;border-radius:7px;border:1px solid var(--border);background:var(--card);color:var(--text2);cursor:pointer;font-size:14px;transition:all .15s}
     .cal-nav-btn:hover{background:var(--card-hover);color:var(--text)}
     .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+    .cal-grid-week .cal-day{min-height:340px}
+    .cal-week-wd{font-size:10px;font-weight:600;text-transform:capitalize;color:var(--text3);margin-bottom:2px}
+    @media(max-width:768px){
+      .cal-grid-week{grid-template-columns:1fr}
+      .cal-grid-week .cal-day{min-height:auto}
+      .cal-week-wd{font-size:12px;color:var(--text2)}
+    }
+    .cal-mode-toggle{display:flex;gap:2px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:2px}
+    .cal-mode-btn{padding:5px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:none;background:transparent;color:var(--text2);font-family:inherit;transition:all .15s;white-space:nowrap}
+    .cal-mode-btn.active{background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.1)}
     .cal-dow{text-align:center;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;padding:6px 0}
     .cal-day{min-height:90px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:6px;cursor:pointer;transition:all .15s;position:relative}
     .cal-day:hover{border-color:var(--accent);background:var(--card-hover)}
@@ -2325,6 +2335,9 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask,onMoveTask,gcalToke
   const [month,setMonth] = useState(now.getMonth());
   const [popup,setPopup] = useState(null);
   const popupRef = useRef(null);
+  const [mode,setMode] = useState('month'); // 'month' | 'week'
+  const mondayOf = d => { const x=new Date(d); x.setHours(12,0,0,0); const off=(x.getDay()+6)%7; x.setDate(x.getDate()-off); return x; };
+  const [weekStart,setWeekStart] = useState(()=>mondayOf(now));
   // ── Arrossegar tasques d'un dia a un altre (ratolí + tàctil) ──
   const dragRef = useRef(null);          // {task, startX, startY, active, ghost}
   const suppressClickRef = useRef(false); // evita obrir el detall just després d'arrossegar
@@ -2384,14 +2397,21 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask,onMoveTask,gcalToke
   },[]);
   const prevMonth = ()=>{if(month===0){setYear(y=>y-1);setMonth(11);}else setMonth(m=>m-1);};
   const nextMonth = ()=>{if(month===11){setYear(y=>y+1);setMonth(0);}else setMonth(m=>m+1);};
+  const shiftWeek = n => setWeekStart(w=>{const x=new Date(w);x.setDate(x.getDate()+n*7);return x;});
+  const goPrev  = ()=> mode==='week' ? shiftWeek(-1) : prevMonth();
+  const goNext  = ()=> mode==='week' ? shiftWeek(1)  : nextMonth();
+  const goToday = ()=>{ setYear(now.getFullYear()); setMonth(now.getMonth()); setWeekStart(mondayOf(now)); };
   const firstDay = new Date(year,month,1);
   const lastDay  = new Date(year,month+1,0);
   const startOffset = (firstDay.getDay()+6)%7;
-  const totalCells  = Math.ceil((startOffset+lastDay.getDate())/7)*7;
-  const cells = Array.from({length:totalCells},(_,i)=>{
-    const d = new Date(year,month,1-startOffset+i);
-    return {date:d,dateStr:ymd(d),inMonth:d.getMonth()===month};
-  });
+  let cells;
+  if (mode==='week') {
+    cells = Array.from({length:7},(_,i)=>{const d=new Date(weekStart);d.setDate(d.getDate()+i);return {date:d,dateStr:ymd(d),inMonth:true};});
+  } else {
+    const totalCells = Math.ceil((startOffset+lastDay.getDate())/7)*7;
+    cells = Array.from({length:totalCells},(_,i)=>{const d=new Date(year,month,1-startOffset+i);return {date:d,dateStr:ymd(d),inMonth:d.getMonth()===month};});
+  }
+  const rangeKey = cells[0].dateStr+'_'+cells[cells.length-1].dateStr;
   // Carrega els esdeveniments de Google Calendar per al mes visible
   const activeGcalCalendars = (gcalCalendars||[]).filter(c=>c.active!==false);
   useEffect(()=>{
@@ -2403,7 +2423,7 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask,onMoveTask,gcalToke
     )).then(results=>{if(!cancelled){setGcalEvents(results.flat());setGcalError('');}})
       .catch(()=>{if(!cancelled)setGcalError('No s\'han pogut carregar els esdeveniments de Google Calendar. Torna a connectar.');});
     return ()=>{cancelled=true;};
-  },[gcalToken,year,month,JSON.stringify(activeGcalCalendars)]);
+  },[gcalToken,rangeKey,JSON.stringify(activeGcalCalendars)]);
   const tasksForDay = dateStr => tasks.filter(t=>{
     // Cada ocurrència d'una tasca recurrent es mostra només el seu propi dia
     if (t.seriesId) return t.endDate === dateStr;
@@ -2412,25 +2432,32 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask,onMoveTask,gcalToke
   });
   const gcalForDay = dateStr => gcalEvents.filter(e=>e.dateStr===dateStr);
   const monthName = firstDay.toLocaleDateString('ca-ES',{month:'long',year:'numeric'});
+  const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate()+6);
+  const weekLabel = `${weekStart.toLocaleDateString('ca-ES',{day:'numeric',month:'short'})} – ${weekEnd.toLocaleDateString('ca-ES',{day:'numeric',month:'short',year:'numeric'})}`;
   const DAYS = ['Dl','Dt','Dc','Dj','Dv','Ds','Dg'];
   return (
     <div className="cal-wrap">
       <div className="cal-nav">
         <div style={{display:'flex',gap:6,alignItems:'center'}}>
-          <button className="cal-nav-btn" onClick={prevMonth}>{Ic.chevL}</button>
-          <button className="cal-nav-btn" onClick={nextMonth}>{Ic.chevR}</button>
-          <h2 style={{marginLeft:8}}>{monthName}</h2>
+          <button className="cal-nav-btn" onClick={goPrev}>{Ic.chevL}</button>
+          <button className="cal-nav-btn" onClick={goNext}>{Ic.chevR}</button>
+          <h2 style={{marginLeft:8}}>{mode==='week'?weekLabel:monthName}</h2>
         </div>
-        <button className="btn btn-ghost" style={{fontSize:12,padding:'5px 12px'}}
-          onClick={()=>{setYear(now.getFullYear());setMonth(now.getMonth());}}>Avui</button>
+        <div style={{display:'flex',gap:8,alignItems:'center'}}>
+          <div className="cal-mode-toggle">
+            <button className={`cal-mode-btn ${mode==='month'?'active':''}`} onClick={()=>setMode('month')}>Mes</button>
+            <button className={`cal-mode-btn ${mode==='week'?'active':''}`} onClick={()=>setMode('week')}>Setmana</button>
+          </div>
+          <button className="btn btn-ghost" style={{fontSize:12,padding:'5px 12px'}} onClick={goToday}>Avui</button>
+        </div>
       </div>
-      <div className="cal-grid">
-        {DAYS.map(d=><div key={d} className="cal-dow">{d}</div>)}
+      <div className={`cal-grid ${mode==='week'?'cal-grid-week':''}`}>
+        {mode!=='week'&&DAYS.map(d=><div key={d} className="cal-dow">{d}</div>)}
         {cells.map(({date,dateStr,inMonth})=>{
           const dayTasks = tasksForDay(dateStr);
           const dayGcal  = gcalForDay(dateStr);
           const isToday  = dateStr===today;
-          const MAX=3; const visible=dayTasks.slice(0,MAX); const extraTasks=dayTasks.length-MAX;
+          const MAX=mode==='week'?12:3; const visible=dayTasks.slice(0,MAX); const extraTasks=dayTasks.length-MAX;
           const gcalVisible = dayGcal.slice(0,Math.max(0,MAX-visible.length));
           const extra = extraTasks + (dayGcal.length-gcalVisible.length);
           const isPopup  = popup?.dateStr===dateStr;
@@ -2438,6 +2465,7 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask,onMoveTask,gcalToke
             <div key={dateStr} data-datestr={dateStr}
               className={`cal-day ${isToday?'today':''} ${!inMonth?'other-month':''} ${dragOverDate===dateStr?'drag-over':''}`}
               onClick={()=>(dayTasks.length>0||dayGcal.length>0)&&setPopup(isPopup?null:{dateStr})}>
+              {mode==='week'&&<div className="cal-week-wd">{date.toLocaleDateString('ca-ES',{weekday:'long'})}</div>}
               <div className="cal-day-num">{date.getDate()}</div>
               {visible.map(t=>{
                 const list=lists.find(l=>l.id===t.listId);
