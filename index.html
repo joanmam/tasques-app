@@ -1018,6 +1018,14 @@ function App() {
     if (task.startDate) upd.startDate = shift(task.startDate);
     await db.collection('tasks').doc(task.id).update(upd);
   };
+  // Actualitza directament les dates d'inici/fi d'una tasca (des del Gantt, arrossegant la barra).
+  const updateTaskDates = async (taskId, patch) => {
+    const upd = {};
+    if (patch.startDate!==undefined) upd.startDate = patch.startDate;
+    if (patch.endDate!==undefined)   upd.endDate   = patch.endDate;
+    if (!Object.keys(upd).length) return;
+    await db.collection('tasks').doc(taskId).update(upd);
+  };
   const toggleTrack = async task => {
     const newVal = !task.tracked;
     if (task.seriesId) {
@@ -1371,7 +1379,7 @@ function App() {
             {view==='gantt' ? (
               <GanttView tasks={tasks} lists={lists}
                 defaultList={isSpecificList?selectedList:'all'}
-                selectedTask={selectedTask} onSelectTask={setSelectedTask}/>
+                selectedTask={selectedTask} onSelectTask={setSelectedTask} onUpdateDates={updateTaskDates}/>
             ) : view==='calendar' ? (
               <CalendarView tasks={filtered} lists={lists} selectedTask={selectedTask} onSelectTask={setSelectedTask} onMoveTask={moveTaskToDate}
                 gcalToken={gcalToken} gcalEvents={gcalEvents} setGcalEvents={setGcalEvents} gcalError={gcalError} setGcalError={setGcalError} gcalCalendars={gcalCalendars}/>
@@ -2736,11 +2744,14 @@ function Heatmap({days, logs, color, period}) {
 }
 
 // ─── GANTT VIEW ───────────────────────────────────────────────────────────────
-function GanttView({tasks,lists,defaultList,selectedTask,onSelectTask}) {
+function GanttView({tasks,lists,defaultList,selectedTask,onSelectTask,onUpdateDates}) {
   const DAY_W=24, DAYS=60, ROW_H=38, LABEL_W=210;
   const [ganttList,setGanttList]=useState(defaultList||'all');
   const [offset,setOffset]=useState(0);
   const scrollRef=useRef(null);
+  const dragRef=useRef(null);
+  const draggedRef=useRef(false);
+  const [dragPreview,setDragPreview]=useState(null); // {taskId, si, ei}
 
   const winStart=(()=>{const d=new Date();d.setDate(d.getDate()-7+offset);return d;})();
   const winStartStr=ymd(winStart);
@@ -2766,6 +2777,40 @@ function GanttView({tasks,lists,defaultList,selectedTask,onSelectTask}) {
       scrollRef.current.scrollLeft=Math.max(0,x);
     }
   },[offset]);
+  // Arrossegar la barra (mode 'move') o les vores ('start'/'end') per canviar les dates.
+  const idxToDate=idx=>{const x=new Date(winStart);x.setDate(x.getDate()+idx);return ymd(x);};
+  const startBarDrag=(e,t,mode,si,ei)=>{
+    e.stopPropagation();
+    if(typeof e.button==='number'&&e.button!==0) return;
+    dragRef.current={taskId:t.id,mode,si,ei,startX:e.clientX,curSi:si,curEi:ei,moved:false};
+    document.body.style.userSelect='none';
+    const move=ev=>{
+      const d=dragRef.current; if(!d) return;
+      const delta=Math.round((ev.clientX-d.startX)/DAY_W);
+      let nsi=d.si,nei=d.ei;
+      if(d.mode==='move'){nsi=d.si+delta;nei=d.ei+delta;}
+      else if(d.mode==='start'){nsi=Math.min(d.si+delta,d.ei);}
+      else if(d.mode==='end'){nei=Math.max(d.ei+delta,d.si);}
+      if(nsi!==d.curSi||nei!==d.curEi){d.curSi=nsi;d.curEi=nei;d.moved=true;draggedRef.current=true;setDragPreview({taskId:d.taskId,si:nsi,ei:nei});}
+      if(ev.cancelable) ev.preventDefault();
+    };
+    const finish=()=>{
+      const d=dragRef.current;
+      window.removeEventListener('pointermove',move);
+      window.removeEventListener('pointerup',finish);
+      window.removeEventListener('pointercancel',finish);
+      document.body.style.userSelect='';
+      if(d&&d.moved&&onUpdateDates){
+        onUpdateDates(d.taskId,{startDate:idxToDate(d.curSi),endDate:idxToDate(d.curEi)});
+      }
+      dragRef.current=null;
+      setDragPreview(null);
+      setTimeout(()=>{draggedRef.current=false;},0);
+    };
+    window.addEventListener('pointermove',move,{passive:false});
+    window.addEventListener('pointerup',finish);
+    window.addEventListener('pointercancel',finish);
+  };
 
   const visibleTasks=tasks.filter(t=>{
     if(ganttList!=='all'&&t.listId!==ganttList) return false;
@@ -2839,13 +2884,16 @@ function GanttView({tasks,lists,defaultList,selectedTask,onSelectTask}) {
             const s=t.startDate||t.endDate;
             const e=t.endDate||t.startDate;
             const si=dayIdx(s),ei=dayIdx(e);
-            const barLeft=Math.max(0,si)*DAY_W+2;
-            const barW=Math.max(DAY_W-4,(Math.min(DAYS-1,ei)-Math.max(0,si)+1)*DAY_W-4);
+            const previewing=dragPreview&&dragPreview.taskId===t.id;
+            const dsi=previewing?dragPreview.si:si;
+            const dei=previewing?dragPreview.ei:ei;
+            const barLeft=Math.max(0,dsi)*DAY_W+2;
+            const barW=Math.max(DAY_W-4,(Math.min(DAYS-1,dei)-Math.max(0,dsi)+1)*DAY_W-4);
             const isSelected=selectedTask?.id===t.id;
             const isDone=t.status==='completada';
             return (
               <div key={t.id} style={{display:'flex',height:ROW_H,borderBottom:'1px solid var(--border)',cursor:'pointer'}}
-                onClick={()=>onSelectTask(t===selectedTask?null:t)}>
+                onClick={()=>{if(draggedRef.current)return;onSelectTask(t===selectedTask?null:t);}}>
                 {/* Label */}
                 <div style={{
                   width:LABEL_W,minWidth:LABEL_W,flexShrink:0,display:'flex',alignItems:'center',gap:7,padding:'0 10px',
@@ -2867,17 +2915,23 @@ function GanttView({tasks,lists,defaultList,selectedTask,onSelectTask}) {
                     <div style={{position:'absolute',top:0,left:todayIdx*DAY_W+DAY_W/2-1,width:2,height:'100%',background:'var(--accent)',opacity:.3,pointerEvents:'none'}}/>
                   )}
                   {/* Bar */}
-                  {si<=DAYS-1&&ei>=0&&(
-                    <div style={{
+                  {dsi<=DAYS-1&&dei>=0&&(
+                    <div title="Arrossega per moure · arrossega les vores per canviar l'inici o el final"
+                      onPointerDown={e=>startBarDrag(e,t,'move',si,ei)}
+                      style={{
                       position:'absolute',left:barLeft,top:7,width:barW,height:24,
                       background:isDone?'var(--bg3)':hexToRgba(color,.82),
                       borderRadius:5,border:`1.5px solid ${isDone?'var(--border)':color}`,
                       display:'flex',alignItems:'center',padding:'0 7px',overflow:'hidden',
                       opacity:isDone?.45:1,
-                      boxShadow:isSelected?`0 0 0 2px ${color}`:undefined,
-                      transition:'box-shadow .1s'
+                      boxShadow:isSelected?`0 0 0 2px ${color}`:(previewing?`0 0 0 2px ${color}`:undefined),
+                      transition:'box-shadow .1s',cursor:'grab',touchAction:'none',userSelect:'none'
                     }}>
-                      {barW>55&&<span style={{fontSize:10,fontWeight:500,color:'white',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',textShadow:'0 1px 3px rgba(0,0,0,.45)'}}>
+                      <div onPointerDown={e=>startBarDrag(e,t,'start',si,ei)} title="Canvia la data d'inici"
+                        style={{position:'absolute',left:0,top:0,width:9,height:'100%',cursor:'ew-resize',touchAction:'none'}}/>
+                      <div onPointerDown={e=>startBarDrag(e,t,'end',si,ei)} title="Canvia la data final"
+                        style={{position:'absolute',right:0,top:0,width:9,height:'100%',cursor:'ew-resize',touchAction:'none'}}/>
+                      {barW>55&&<span style={{fontSize:10,fontWeight:500,color:'white',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',textShadow:'0 1px 3px rgba(0,0,0,.45)',pointerEvents:'none'}}>
                         {t.title}
                       </span>}
                     </div>
