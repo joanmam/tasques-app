@@ -959,11 +959,9 @@ function App() {
     if (selectedTask?.id===id) setSelectedTask(null);
   };
   const canDeleteTask = task => {
-    if (!task) return false;
-    const list = lists.find(l=>l.id===task.listId);
+    const list = lists.find(l=>l.id===task?.listId);
     if (!list) return true;                    // tasca personal sense llista
-    if (list.ownerId===user.uid) return true;  // ets propietaria de la llista
-    return task.ownerId===user.uid;            // o has creat tu la tasca
+    return list.ownerId===user.uid;            // nomes el propietari de la llista pot esborrar
   };
   const requestDelete = task => {
     if (task.seriesId) setDeleteConfirm(task);
@@ -1176,7 +1174,7 @@ function App() {
                 <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               Tasques
-              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v4.4</span>
+              <span style={{fontSize:9,color:'var(--text3)',fontWeight:400,marginLeft:2}}>v4.6</span>
               <span className={`sync-dot ${syncing?'syncing':''}`} title={syncing?'Sincronitzant...':'Sincronitzat'}/>
             </span>
             <button className="btn btn-ghost btn-icon" style={{color:'var(--text2)',padding:5}} onClick={()=>setDarkMode(d=>!d)}>
