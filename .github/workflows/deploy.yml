@@ -1,8 +1,8 @@
 name: Deploy to GitHub Pages
 
+# Desactivat: la publicacio es fa directament des de la branca main (Settings > Pages).
+# Es pot tornar a executar manualment si algun dia es vol tornar a Actions.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
