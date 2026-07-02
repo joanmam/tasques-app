@@ -217,6 +217,21 @@
     .subtask-row input{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:inherit;font-size:13px}
     .subtask-row .del{color:var(--text3);cursor:pointer;font-size:16px;line-height:1}
     .subtask-row .del:hover{color:var(--danger)}
+    .task-chat{display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto;padding:2px 0}
+    .task-chat-empty{font-size:12px;color:var(--text3);padding:6px 2px}
+    .chat-msg{display:flex}
+    .chat-msg.mine{justify-content:flex-end}
+    .chat-bubble{max-width:82%;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:6px 9px}
+    .chat-msg.mine .chat-bubble{background:var(--accent);border-color:var(--accent);color:#fff}
+    .chat-author{font-size:10px;font-weight:700;color:var(--text3);margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .chat-text{font-size:13px;line-height:1.35;white-space:pre-wrap;word-break:break-word}
+    .chat-time{font-size:9px;color:var(--text3);margin-top:2px;text-align:right}
+    .chat-msg.mine .chat-time{color:rgba(255,255,255,.85)}
+    .chat-input-row{display:flex;gap:6px;margin-top:8px}
+    .chat-input{flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;padding:8px 10px;outline:none}
+    .chat-input:focus{border-color:var(--accent)}
+    .chat-send{flex-shrink:0;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:0 14px;font-size:14px;cursor:pointer;font-family:inherit}
+    .chat-send:disabled{opacity:.5;cursor:default}
     .subtask-check{width:14px;height:14px;border-radius:3px;border:1.5px solid var(--border);flex-shrink:0;cursor:pointer;transition:all .15s}
     .subtask-check:hover{border-color:var(--accent)}
     .subtask-check.checked{background:var(--success);border-color:var(--success)}
@@ -934,7 +949,8 @@ function App() {
     setSyncing(false); setShowModal(false);
   };
   const updateTask = async updated => {
-    const {id,...data} = updated;
+    // 'comments' es gestiona a part (arrayUnion) per no sobreescriure missatges d'altres.
+    const {id,comments,...data} = updated;
     setSyncing(true);
     await db.collection('tasks').doc(id).update(data);
     setSyncing(false); setSelectedTask(updated);
@@ -1433,6 +1449,7 @@ function App() {
 
         {selectedTask&&(
           <DetailPanel task={selectedTask} lists={lists} defaultFields={defaultFields}
+            currentUserUid={user.uid} currentUserEmail={user.email}
             onUpdate={updateTask} onDelete={canDeleteTask(selectedTask)?()=>requestDelete(selectedTask):null}
             onClose={()=>setSelectedTask(null)} onDelay={delayTask}/>
         )}
@@ -1533,7 +1550,7 @@ function TaskItem({task,lists,selected,onClick,onToggle,onDelete,onDelay,onTrack
 }
 
 // ─── DETAIL PANEL ─────────────────────────────────────────────────────────────
-function DetailPanel({task,lists,defaultFields,onUpdate,onDelete,onClose,onDelay}) {
+function DetailPanel({task,lists,defaultFields,currentUserUid,currentUserEmail,onUpdate,onDelete,onClose,onDelay}) {
   const [local,setLocal] = useState(task);
   const [tagInput,setTagInput] = useState('');
   const timer = useRef(null);
@@ -1594,6 +1611,23 @@ function DetailPanel({task,lists,defaultFields,onUpdate,onDelete,onClose,onDelay
   const renameAttachment = (att, title) =>
     push({attachments:(local.attachments||[]).map(a=>a.id===att.id?{...a,title}:a)});
   const isImg = att => (att.type||'').startsWith('image/') || /\.(jpe?g|png|webp|heic|gif)$/i.test(att.name||'');
+  // ── Missatges de la tasca (només tasques compartides) ──
+  const isShared = (list?.sharedWith||[]).length>0;
+  const messages = [...(task.comments||[])].sort((a,b)=>(a.ts||0)-(b.ts||0));
+  const [msgInput,setMsgInput] = useState('');
+  const [sendingMsg,setSendingMsg] = useState(false);
+  const fmtMsgTime = ts => { if(!ts) return ''; const d=new Date(ts);
+    return d.toLocaleDateString('ca-ES',{day:'numeric',month:'short'})+' '+d.toLocaleTimeString('ca-ES',{hour:'2-digit',minute:'2-digit'}); };
+  const sendMessage = async () => {
+    const text = msgInput.trim(); if(!text||sendingMsg) return;
+    setSendingMsg(true);
+    const msg = {id:uid(), uid:currentUserUid||'', email:currentUserEmail||'', text, ts:Date.now()};
+    try {
+      await db.collection('tasks').doc(local.id).update({comments: firebase.firestore.FieldValue.arrayUnion(msg)});
+      setMsgInput('');
+    } catch(e){ /* sense permis o error de xarxa */ }
+    setSendingMsg(false);
+  };
   return (
     <div className="detail-panel">
       <div className="detail-header">
@@ -1791,6 +1825,33 @@ function DetailPanel({task,lists,defaultFields,onUpdate,onDelete,onClose,onDelay
             <button className="add-subtask-btn" onClick={addSubtask}>{Ic.plus} Afegir subtasca</button>
           </div>
         </div>
+        {isShared && (
+        <div className="detail-field">
+          <label>Missatges ({messages.length})</label>
+          <div className="task-chat">
+            {messages.length===0
+              ? <div className="task-chat-empty">Cap missatge encara. Escriu per parlar sobre aquesta tasca.</div>
+              : messages.map(m=>{
+                  const mine = m.uid===currentUserUid;
+                  return (
+                    <div key={m.id} className={`chat-msg ${mine?'mine':''}`}>
+                      <div className="chat-bubble">
+                        {!mine && <div className="chat-author">{m.email||'?'}</div>}
+                        <div className="chat-text">{m.text}</div>
+                        <div className="chat-time">{fmtMsgTime(m.ts)}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+          </div>
+          <div className="chat-input-row">
+            <input className="chat-input" value={msgInput} placeholder="Escriu un missatge…"
+              onChange={e=>setMsgInput(e.target.value)}
+              onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}}}/>
+            <button className="chat-send" disabled={sendingMsg||!msgInput.trim()} onClick={sendMessage} title="Envia">➤</button>
+          </div>
+        </div>
+        )}
       </div>
     </div>
   );
