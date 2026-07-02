@@ -959,9 +959,11 @@ function App() {
     if (selectedTask?.id===id) setSelectedTask(null);
   };
   const canDeleteTask = task => {
-    const list = lists.find(l=>l.id===task?.listId);
-    if (!list) return true;
-    return list.ownerId===user.uid;
+    if (!task) return false;
+    const list = lists.find(l=>l.id===task.listId);
+    if (!list) return true;                    // tasca personal sense llista
+    if (list.ownerId===user.uid) return true;  // ets propietaria de la llista
+    return task.ownerId===user.uid;            // o has creat tu la tasca
   };
   const requestDelete = task => {
     if (task.seriesId) setDeleteConfirm(task);
