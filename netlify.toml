@@ -1,0 +1,5 @@
+# Tasques és una app estàtica: l'index.html ja és a l'arrel del repo.
+# No cal cap build; només s'ha de publicar l'arrel tal qual.
+[build]
+  publish = "."
+  command = "echo 'Static site — no build step needed'"
