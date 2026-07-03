@@ -2215,12 +2215,21 @@ function DeleteSeriesModal({task,onConfirm,onClose}) {
 
 // ─── NEW TASK MODAL ───────────────────────────────────────────────────────────
 function NewTaskModal({lists,defaultFields,defaultList,onSave,onClose,preFill}) {
-  const [form,setForm] = useState({
-    title:preFill?.title||'',description:'',startDate:preFill?.endDate||today,
-    endDate:preFill?.endDate||'',startTime:'',endTime:preFill?.endTime||'',
-    priority:'mitjana',status:'pendent',tags:[],
-    listId:preFill?.listId||defaultList||lists[0]?.id||'',subtasks:[],customValues:{},
-    reminderMinutes:0,recurrence:'none',recurrenceEndDate:''
+  const [form,setForm] = useState(()=>{
+    // Durada per defecte: mateix dia de creació (inici=fi) i d'una hora,
+    // començant a la propera hora en punt. L'usuari ho pot editar després.
+    const now = new Date();
+    const startHour = now.getMinutes()===0 ? now.getHours() : now.getHours()+1;
+    const pad = n => String(n%24).padStart(2,'0');
+    const defaultStartTime = `${pad(startHour)}:00`;
+    const defaultEndTime = `${pad(startHour+1)}:00`;
+    return {
+      title:preFill?.title||'',description:'',startDate:preFill?.endDate||today,
+      endDate:preFill?.endDate||today,startTime:preFill?.startTime||defaultStartTime,endTime:preFill?.endTime||defaultEndTime,
+      priority:'mitjana',status:'pendent',tags:[],
+      listId:preFill?.listId||defaultList||lists[0]?.id||'',subtasks:[],customValues:{},
+      reminderMinutes:0,recurrence:'none',recurrenceEndDate:''
+    };
   });
   const [tagInput,setTagInput] = useState('');
   const ref = useRef(null);
