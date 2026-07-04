@@ -655,6 +655,7 @@ function App() {
   const [defaultFields,setDefaultFields] = useState([]);
   const [completionLogs,setCompletionLogs] = useState([]);
   const [watchedTasks,setWatchedTasks]     = useState([]); // tasques d'altres on m'han convidat a "informar-me" (només lectura)
+  const [allUsers,setAllUsers]             = useState([]); // {uid,email} de tots els usuaris registrats (per al desplegable de "Convida a informar")
   const [syncing,setSyncing]         = useState(false);
   const [toast,setToast]             = useState('');
   const showToast = msg => { setToast(msg); setTimeout(()=>setToast(''),3000); };
@@ -768,7 +769,10 @@ function App() {
     // Tasques d'altres usuaris on m'han convidat amb "Convida a informar" (només lectura)
     const unsubW=db.collection('tasks').where('watchers','array-contains',user.uid)
       .onSnapshot(snap=>{setWatchedTasks(snap.docs.map(d=>({id:d.id,...d.data()})));});
-    return()=>{unsubT();unsubL1();unsubL2();unsubS();unsubCL();unsubW();sharedTasksUnsub();};
+    // Directori d'usuaris registrats (per al desplegable de "Convida a informar")
+    const unsubU=db.collection('users')
+      .onSnapshot(snap=>{setAllUsers(snap.docs.map(d=>({uid:d.id,email:d.data().email})).filter(u=>u.email));});
+    return()=>{unsubT();unsubL1();unsubL2();unsubS();unsubCL();unsubW();unsubU();sharedTasksUnsub();};
   },[user]);
 
   useEffect(()=>{
@@ -1519,7 +1523,7 @@ function App() {
             currentUserUid={user.uid} currentUserEmail={user.email}
             onUpdate={updateTask} onDelete={canDeleteTask(selectedTask)?()=>requestDelete(selectedTask):null}
             onClose={()=>setSelectedTask(null)} onDelay={delayTask}
-            onInviteWatcher={inviteToTask} onRemoveWatcher={removeWatcher}/>
+            onInviteWatcher={inviteToTask} onRemoveWatcher={removeWatcher} allUsers={allUsers}/>
         ))}
       </div>
 
@@ -1622,7 +1626,7 @@ function TaskItem({task,lists,selected,onClick,onToggle,onDelete,onDelay,onTrack
 }
 
 // ─── DETAIL PANEL ─────────────────────────────────────────────────────────────
-function DetailPanel({task,lists,defaultFields,currentUserUid,currentUserEmail,onUpdate,onDelete,onClose,onDelay,onInviteWatcher,onRemoveWatcher}) {
+function DetailPanel({task,lists,defaultFields,currentUserUid,currentUserEmail,onUpdate,onDelete,onClose,onDelay,onInviteWatcher,onRemoveWatcher,allUsers}) {
   const [local,setLocal] = useState(task);
   const [tagInput,setTagInput] = useState('');
   const timer = useRef(null);
@@ -1926,7 +1930,8 @@ function DetailPanel({task,lists,defaultFields,currentUserUid,currentUserEmail,o
         )}
         {local.ownerId===currentUserUid && (
           <WatcherSection taskId={local.id} watchers={local.watchers||[]} watcherEmails={local.watcherEmails||{}}
-            onInvite={onInviteWatcher} onRemove={onRemoveWatcher}/>
+            onInvite={onInviteWatcher} onRemove={onRemoveWatcher}
+            allUsers={allUsers} currentUserUid={currentUserUid}/>
         )}
       </div>
     </div>
@@ -1934,32 +1939,41 @@ function DetailPanel({task,lists,defaultFields,currentUserUid,currentUserEmail,o
 }
 
 // ─── WATCHER SECTION (Convida a informar) ──────────────────────────────────────
-function WatcherSection({taskId,watchers,watcherEmails,onInvite,onRemove}) {
+function WatcherSection({taskId,watchers,watcherEmails,onInvite,onRemove,allUsers,currentUserUid}) {
   const [email,setEmail]     = useState('');
   const [error,setError]     = useState('');
   const [loading,setLoading] = useState(false);
+  const candidates = (allUsers||[]).filter(u=>u.uid!==currentUserUid && !watchers.includes(u.uid));
   const handleInvite = async () => {
     if (!email.trim()) return;
     setLoading(true); setError('');
     const err = await onInvite(taskId, email.trim());
-    if (err) setError(err); else setEmail('');
+    if (err) setError(err); else { setEmail(''); }
     setLoading(false);
   };
   return (
     <div className="detail-field" style={{borderTop:'1px solid var(--border)',paddingTop:12}}>
       <label>{Ic.eye} Convida a informar</label>
       <p style={{fontSize:11,color:'var(--text3)',marginTop:-2,marginBottom:8}}>
-        Convida algú per correu a veure aquesta tasca en mode només lectura, sense poder-la editar ni completar.
+        Convida algú a veure aquesta tasca en mode només lectura, sense poder-la editar ni completar.
       </p>
-      <div style={{display:'flex',gap:8}}>
-        <input className="input" type="email" placeholder="Correu electrònic" value={email}
-          onChange={e=>{setEmail(e.target.value);setError('');}}
-          onKeyDown={e=>e.key==='Enter'&&handleInvite()} style={{flex:1}}/>
-        <button className="btn btn-primary" style={{whiteSpace:'nowrap',padding:'7px 14px'}}
-          onClick={handleInvite} disabled={loading||!email.trim()}>
-          {loading?'...':'Convida'}
-        </button>
-      </div>
+      {candidates.length===0 ? (
+        <p style={{fontSize:12,color:'var(--text3)',padding:'6px 0'}}>
+          No hi ha cap altre usuari registrat a l'app per convidar.
+        </p>
+      ) : (
+        <div style={{display:'flex',gap:8}}>
+          <select className="input" value={email}
+            onChange={e=>{setEmail(e.target.value);setError('');}} style={{flex:1}}>
+            <option value="">— Selecciona una persona —</option>
+            {candidates.map(u=><option key={u.uid} value={u.email}>{u.email}</option>)}
+          </select>
+          <button className="btn btn-primary" style={{whiteSpace:'nowrap',padding:'7px 14px'}}
+            onClick={handleInvite} disabled={loading||!email.trim()}>
+            {loading?'...':'Convida'}
+          </button>
+        </div>
+      )}
       {error&&<p style={{color:'var(--danger)',fontSize:11,marginTop:4}}>{error}</p>}
       {watchers.length>0 && (
         <div style={{marginTop:8,display:'flex',flexDirection:'column',gap:6}}>
