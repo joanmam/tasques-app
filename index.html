@@ -1460,7 +1460,7 @@ function App() {
         preFill={voicePreFill}
         onSave={addTask} onClose={()=>{setShowModal(false);setVoicePreFill(null);}}/>}
       {showListModal&&<NewListModal onSave={addList} onClose={()=>setShowListModal(false)} groups={presentGroups}/>}
-      {editingList&&<ListSettingsModal list={editingList} currentUserUid={user.uid} onSave={(id,data)=>updateList(id,data)} onClose={()=>setEditingList(null)} groups={presentGroups} onShare={shareList} onUnshare={unshareList}/>}
+      {editingList&&<ListSettingsModal list={editingList} currentUserUid={user.uid} onSave={(id,data)=>updateList(id,data)} onClose={()=>setEditingList(null)} groups={presentGroups} onShare={shareList} onUnshare={unshareList} onDelete={async id=>{await deleteList(id);setEditingList(null);}}/>}
       {showDefaultFields&&<DefaultFieldsModal fields={defaultFields} onSave={saveDefaultFields} onClose={()=>setShowDefaultFields(false)}/>}
       {showGcalSettings&&<GcalSettingsModal calendars={gcalCalendars} onSave={cals=>{saveGcalCalendars(cals);setShowGcalSettings(false);}} onClose={()=>setShowGcalSettings(false)}/>}
       {deleteConfirm&&<DeleteSeriesModal task={deleteConfirm} onConfirm={mode=>deleteSeries(deleteConfirm,mode)} onClose={()=>setDeleteConfirm(null)}/>}
@@ -2048,7 +2048,7 @@ function GcalSettingsModal({calendars,onSave,onClose}) {
 }
 
 // ─── LIST SETTINGS MODAL ──────────────────────────────────────────────────────
-function ListSettingsModal({list,currentUserUid,onSave,onClose,groups,onShare,onUnshare}) {
+function ListSettingsModal({list,currentUserUid,onSave,onClose,groups,onShare,onUnshare,onDelete}) {
   const [tab,setTab]       = useState('general');
   const [name,setName]     = useState(list.name);
   const [color,setColor]   = useState(list.color);
@@ -2057,6 +2057,8 @@ function ListSettingsModal({list,currentUserUid,onSave,onClose,groups,onShare,on
   const [shareEmail,setShareEmail]     = useState('');
   const [shareError,setShareError]     = useState('');
   const [shareLoading,setShareLoading] = useState(false);
+  const [confirmDelete,setConfirmDelete] = useState(false);
+  const [deleting,setDeleting]           = useState(false);
   const isOwner = list.ownerId===currentUserUid;
   const allGroups = [...new Set([...LIST_GROUPS,...(groups||[])])];
   const sharedWithUids   = list.sharedWith||[];
@@ -2069,6 +2071,10 @@ function ListSettingsModal({list,currentUserUid,onSave,onClose,groups,onShare,on
     if (err) setShareError(err);
     else setShareEmail('');
     setShareLoading(false);
+  };
+  const handleDelete = async () => {
+    setDeleting(true);
+    await onDelete(list.id);
   };
   return (
     <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
@@ -2148,9 +2154,27 @@ function ListSettingsModal({list,currentUserUid,onSave,onClose,groups,onShare,on
             </div>
           </div>
         )}
-        <div className="modal-actions">
-          <button className="btn btn-ghost" onClick={onClose}>Tancar</button>
-          {isOwner&&tab!=='share'&&<button className="btn btn-primary" onClick={save}>Guardar</button>}
+        {isOwner&&confirmDelete&&(
+          <div style={{marginTop:12,padding:'12px 14px',background:'rgba(220,60,60,.08)',border:'1px solid rgba(220,60,60,.25)',borderRadius:10}}>
+            <p style={{fontSize:12,color:'var(--text2)',marginBottom:10}}>
+              Segur que vols eliminar "{list.name}"? Aquesta acció també esborrarà totes les tasques d'aquesta llista i no es pot desfer.
+            </p>
+            <div style={{display:'flex',gap:8}}>
+              <button className="btn btn-ghost" style={{fontSize:12}} onClick={()=>setConfirmDelete(false)} disabled={deleting}>Cancel·lar</button>
+              <button className="btn btn-danger-soft" style={{fontSize:12}} onClick={handleDelete} disabled={deleting}>
+                {deleting?'Eliminant...':'Sí, eliminar-la'}
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="modal-actions" style={{justifyContent:isOwner?'space-between':'flex-end'}}>
+          {isOwner&&!confirmDelete&&(
+            <button className="btn btn-danger-soft" onClick={()=>setConfirmDelete(true)}>Eliminar llista</button>
+          )}
+          <div style={{display:'flex',gap:8}}>
+            <button className="btn btn-ghost" onClick={onClose} disabled={deleting}>Tancar</button>
+            {isOwner&&tab!=='share'&&!confirmDelete&&<button className="btn btn-primary" onClick={save}>Guardar</button>}
+          </div>
         </div>
       </div>
     </div>
