@@ -510,6 +510,39 @@ const fetchGcalEvents = async (token, calendarId, timeMinStr, timeMaxStr, cal) =
   const data = await res.json();
   return (data.items||[]).filter(ev=>ev.status!=='cancelled').flatMap(ev=>gcalEventToDays(ev, cal));
 };
+// ─── Publicacio de tasques amb l'etiqueta "familiar" al calendari familiar de Google ──
+const FAMILY_CALENDAR_ID = 'family01692891853073540554@group.calendar.google.com';
+const FAMILY_SYNC_TAG = 'familiar';
+const taskToGcalEvent = task => {
+  const body = {summary: task.title||'(sense títol)', description: task.description||''};
+  const sd = task.startDate||task.endDate, ed = task.endDate||task.startDate;
+  if (task.startTime || task.endTime) {
+    const st = task.startTime||task.endTime, et = task.endTime||task.startTime;
+    body.start = {dateTime:`${sd}T${st}:00`, timeZone:'Europe/Madrid'};
+    body.end   = {dateTime:`${ed}T${et}:00`, timeZone:'Europe/Madrid'};
+  } else {
+    // Tot el dia: Google Calendar exigeix que "end.date" sigui l'endemà del darrer dia.
+    const endPlus = new Date(`${ed}T12:00`); endPlus.setDate(endPlus.getDate()+1);
+    body.start = {date: sd};
+    body.end   = {date: ymd(endPlus)};
+  }
+  return body;
+};
+const upsertGcalEvent = async (token, calendarId, eventId, body) => {
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events${eventId?'/'+eventId:''}`;
+  const res = await fetch(url, {
+    method: eventId?'PATCH':'POST',
+    headers: {Authorization:`Bearer ${token}`, 'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error('gcal-upsert-failed-'+res.status);
+  return res.json();
+};
+const deleteGcalEvent = async (token, calendarId, eventId) => {
+  const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`,
+    {method:'DELETE', headers:{Authorization:`Bearer ${token}`}});
+  if (!res.ok && res.status!==410 && res.status!==404) throw new Error('gcal-delete-failed-'+res.status);
+};
 const dateCategory = t => {
   if (!t.endDate) return 'nodate';
   if (t.endDate < today) return 'overdue';
@@ -676,7 +709,7 @@ function App() {
     if (!window.google?.accounts?.oauth2) { showToast('Google encara no s\'ha carregat, prova de nou'); return; }
     const tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: GOOGLE_CLIENT_ID,
-      scope: 'https://www.googleapis.com/auth/calendar.readonly',
+      scope: 'https://www.googleapis.com/auth/calendar.events',
       callback: resp => {
         if (resp?.access_token) {
           saveGcalToken(resp.access_token, resp.expires_in||3600);
@@ -692,7 +725,7 @@ function App() {
   };
   const [gcalCalendars,setGcalCalendars] = useState([
     {id:'primary',label:'Principal',color:'#4f8ef7'},
-    {id:'family01692891853073540554@group.calendar.google.com',label:'Familiar',color:'#4fbe96'}
+    {id:FAMILY_CALENDAR_ID,label:'Familiar',color:'#4fbe96'}
   ]);
   const [showGcalSettings,setShowGcalSettings] = useState(false);
   const saveGcalCalendars = async cals => {
@@ -923,6 +956,27 @@ function App() {
     rec.start();
   };
 
+  // Crea/actualitza/esborra l'event al calendari familiar de Google segons si la tasca
+  // te l'etiqueta FAMILY_SYNC_TAG. Nomes fa res si Google Calendar esta connectat.
+  const syncFamilyCalendar = async (taskId, taskData, prevEventId) => {
+    if (!gcalToken) return;
+    const hasTag = (taskData.tags||[]).includes(FAMILY_SYNC_TAG);
+    try {
+      if (hasTag && (taskData.startDate||taskData.endDate)) {
+        const body = taskToGcalEvent(taskData);
+        const ev = await upsertGcalEvent(gcalToken, FAMILY_CALENDAR_ID, prevEventId, body);
+        if (ev.id !== prevEventId) {
+          await db.collection('tasks').doc(taskId).update({gcalFamilyEventId: ev.id});
+        }
+      } else if (!hasTag && prevEventId) {
+        await deleteGcalEvent(gcalToken, FAMILY_CALENDAR_ID, prevEventId);
+        await db.collection('tasks').doc(taskId).update({gcalFamilyEventId: firebase.firestore.FieldValue.delete()});
+      }
+    } catch (e) {
+      console.error('Sync calendari familiar:', e);
+      showToast('⚠ No s\'ha pogut sincronitzar amb el calendari familiar');
+    }
+  };
   const addTask = async data => {
     setSyncing(true);
     if (data.recurrence && data.recurrence !== 'none') {
@@ -959,8 +1013,11 @@ function App() {
       });
       await batch.commit();
       showToast(`✓ Sèrie creada: ${dates.length} ocurrències`);
+      // Nota: les series recurrents no es publiquen al calendari familiar (evita crear-hi moltes ocurrències).
     } else {
-      await db.collection('tasks').add({...data,ownerId:user.uid,ownerEmail:user.email,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+      const fullData = {...data,ownerId:user.uid,ownerEmail:user.email,createdAt:firebase.firestore.FieldValue.serverTimestamp()};
+      const ref = await db.collection('tasks').add(fullData);
+      syncFamilyCalendar(ref.id, data, null);
     }
     setSyncing(false); setShowModal(false);
   };
@@ -969,9 +1026,15 @@ function App() {
     const {id,comments,...data} = updated;
     setSyncing(true);
     await db.collection('tasks').doc(id).update(data);
+    syncFamilyCalendar(id, data, data.gcalFamilyEventId||null);
     setSyncing(false); setSelectedTask(updated);
   };
   const deleteTask = async id => {
+    const task = tasks.find(t=>t.id===id);
+    if (task?.gcalFamilyEventId && gcalToken) {
+      try { await deleteGcalEvent(gcalToken, FAMILY_CALENDAR_ID, task.gcalFamilyEventId); }
+      catch(e) { console.error('Sync calendari familiar (esborrat):', e); }
+    }
     await db.collection('tasks').doc(id).delete();
     if (selectedTask?.id===id) setSelectedTask(null);
   };
