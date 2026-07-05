@@ -158,13 +158,49 @@ def main():
             except Exception as e:
                 print(f"ERR {title} -> {addr}: {e}")
 
+    # --- Notificacio: l'assignat ha completat una tasca que li havien assignat ---
+    assigned_notified = 0
+    completades = db.collection("tasks").where("status", "==", "completada").stream()
+    for t in completades:
+        d = t.to_dict()
+        assignee_id = d.get("assigneeId")
+        owner_id = d.get("ownerId")
+        if not assignee_id or not owner_id or assignee_id == owner_id:
+            continue
+        log_ref = db.collection("assignCompletionLog").document(t.id)
+        if log_ref.get().exists:
+            continue
+        owner_addr = get_email(owner_id)
+        if not owner_addr:
+            continue
+        title = d.get("title", "Tasca")
+        assignee_addr = get_email(assignee_id) or "La persona assignada"
+        subject = f"✅ {title} — completada"
+        body = (
+            f"{assignee_addr} ha completat la tasca «{title}» que li havies assignat.\n\n"
+            f"Obre l'app: {APP_URL}\n"
+        )
+        assigned_notified += 1
+        if DRY_RUN:
+            print(f"[DRY] assignacio completada: {title} -> {owner_addr}")
+            continue
+        try:
+            send_email(owner_addr, subject, body)
+            log_ref.set({
+                "notifiedAt": firestore.SERVER_TIMESTAMP,
+                "taskId": t.id, "ownerId": owner_id, "assigneeId": assignee_id
+            })
+            print(f"OK  assignacio completada: {title} -> {owner_addr}")
+        except Exception as e:
+            print(f"ERR assignacio completada: {title} -> {owner_addr}: {e}")
+
     if smtp["conn"] is not None:
         try:
             smtp["conn"].quit()
         except Exception:
             pass
 
-    print(f"Fet. Recordatoris dins de finestra: {due}. Hora: {now.isoformat()}")
+    print(f"Fet. Recordatoris dins de finestra: {due}. Assignacions completades notificades: {assigned_notified}. Hora: {now.isoformat()}")
 
 
 if __name__ == "__main__":
