@@ -1686,7 +1686,13 @@ function TaskItem({task,lists,selected,onClick,onToggle,onDelete,onDelay,onTrack
               <span className={`date-badge ${cfg?.cls||'date-later'}`}>
                 {Ic.calendar}
                 {isOverdue(task)?'⚠ ':''}
-                {fmt(task.endDate)}{task.endTime?' '+task.endTime:''}
+                {fmt(task.endDate)}
+                {(task.startTime||task.endTime)&&(
+                  <>
+                    {' '}{Ic.clock}{task.startTime||'/'}
+                    {' '}{Ic.clock}{task.endTime||'/'}
+                  </>
+                )}
               </span>
             );
           })()}
