@@ -517,9 +517,14 @@ const fetchGcalEvents = async (token, calendarId, timeMinStr, timeMaxStr, cal) =
   const data = await res.json();
   return (data.items||[]).filter(ev=>ev.status!=='cancelled').flatMap(ev=>gcalEventToDays(ev, cal));
 };
-// ─── Publicacio de tasques amb l'etiqueta "familiar" al calendari familiar de Google ──
+// ─── Publicacio de tasques amb determinades etiquetes a calendaris de Google ──
 const FAMILY_CALENDAR_ID = 'family01692891853073540554@group.calendar.google.com';
-const FAMILY_SYNC_TAG = 'familiar';
+const COTXE_CALENDAR_ID  = '791b13f27d24060543bff34e7a35da258414f5f4796c806c9e12544edf946a0a@group.calendar.google.com';
+// Cada regla: si la tasca te aquesta etiqueta, es publica/actualitza/esborra a aquest calendari.
+const GCAL_SYNC_RULES = [
+  {tag:'familiar', calendarId:FAMILY_CALENDAR_ID},
+  {tag:'cotxe',    calendarId:COTXE_CALENDAR_ID},
+];
 const taskToGcalEvent = task => {
   const body = {summary: task.title||'(sense títol)', description: task.description||''};
   const sd = task.startDate||task.endDate, ed = task.endDate||task.startDate;
@@ -963,26 +968,32 @@ function App() {
     rec.start();
   };
 
-  // Crea/actualitza/esborra l'event al calendari familiar de Google segons si la tasca
-  // te l'etiqueta FAMILY_SYNC_TAG. Nomes fa res si Google Calendar esta connectat.
-  const syncFamilyCalendar = async (taskId, taskData, prevEventId) => {
+  // Crea/actualitza/esborra l'event a cada calendari de Google segons GCAL_SYNC_RULES
+  // (una tasca amb l'etiqueta corresponent es publica al calendari d'aquella regla).
+  // Nomes fa res si Google Calendar esta connectat. prevEventIds: {tag: eventId, ...}
+  const syncTaggedCalendars = async (taskId, taskData, prevEventIds) => {
     if (!gcalToken) return;
-    const hasTag = (taskData.tags||[]).includes(FAMILY_SYNC_TAG);
-    try {
-      if (hasTag && (taskData.startDate||taskData.endDate)) {
-        const body = taskToGcalEvent(taskData);
-        const ev = await upsertGcalEvent(gcalToken, FAMILY_CALENDAR_ID, prevEventId, body);
-        if (ev.id !== prevEventId) {
-          await db.collection('tasks').doc(taskId).update({gcalFamilyEventId: ev.id});
+    const tags = taskData.tags||[];
+    const prev = prevEventIds||{};
+    const patch = {};
+    for (const rule of GCAL_SYNC_RULES) {
+      const hasTag = tags.includes(rule.tag);
+      const prevId = prev[rule.tag]||null;
+      try {
+        if (hasTag && (taskData.startDate||taskData.endDate)) {
+          const body = taskToGcalEvent(taskData);
+          const ev = await upsertGcalEvent(gcalToken, rule.calendarId, prevId, body);
+          if (ev.id !== prevId) patch[`gcalSyncEventIds.${rule.tag}`] = ev.id;
+        } else if (!hasTag && prevId) {
+          await deleteGcalEvent(gcalToken, rule.calendarId, prevId);
+          patch[`gcalSyncEventIds.${rule.tag}`] = firebase.firestore.FieldValue.delete();
         }
-      } else if (!hasTag && prevEventId) {
-        await deleteGcalEvent(gcalToken, FAMILY_CALENDAR_ID, prevEventId);
-        await db.collection('tasks').doc(taskId).update({gcalFamilyEventId: firebase.firestore.FieldValue.delete()});
+      } catch (e) {
+        console.error(`Sync calendari (${rule.tag}):`, e);
+        showToast(`⚠ No s'ha pogut sincronitzar amb el calendari "${rule.tag}"`);
       }
-    } catch (e) {
-      console.error('Sync calendari familiar:', e);
-      showToast('⚠ No s\'ha pogut sincronitzar amb el calendari familiar');
     }
+    if (Object.keys(patch).length) await db.collection('tasks').doc(taskId).update(patch);
   };
   const addTask = async data => {
     setSyncing(true);
@@ -1024,7 +1035,7 @@ function App() {
     } else {
       const fullData = {...data,ownerId:user.uid,ownerEmail:user.email,createdAt:firebase.firestore.FieldValue.serverTimestamp()};
       const ref = await db.collection('tasks').add(fullData);
-      syncFamilyCalendar(ref.id, data, null);
+      syncTaggedCalendars(ref.id, data, null);
     }
     setSyncing(false); setShowModal(false);
   };
@@ -1033,14 +1044,18 @@ function App() {
     const {id,comments,...data} = updated;
     setSyncing(true);
     await db.collection('tasks').doc(id).update(data);
-    syncFamilyCalendar(id, data, data.gcalFamilyEventId||null);
+    syncTaggedCalendars(id, data, data.gcalSyncEventIds||{});
     setSyncing(false); setSelectedTask(updated);
   };
   const deleteTask = async id => {
     const task = tasks.find(t=>t.id===id);
-    if (task?.gcalFamilyEventId && gcalToken) {
-      try { await deleteGcalEvent(gcalToken, FAMILY_CALENDAR_ID, task.gcalFamilyEventId); }
-      catch(e) { console.error('Sync calendari familiar (esborrat):', e); }
+    if (task?.gcalSyncEventIds && gcalToken) {
+      for (const rule of GCAL_SYNC_RULES) {
+        const evId = task.gcalSyncEventIds[rule.tag];
+        if (!evId) continue;
+        try { await deleteGcalEvent(gcalToken, rule.calendarId, evId); }
+        catch(e) { console.error(`Sync calendari (${rule.tag}, esborrat):`, e); }
+      }
     }
     await db.collection('tasks').doc(id).delete();
     if (selectedTask?.id===id) setSelectedTask(null);
