@@ -1,0 +1,22 @@
+name: Importa Notion (un cop)
+
+# Nomes es pot executar manualment des de la pestanya Actions de GitHub.
+# Es un import UNIC (tasques Notion -> llista "Importades"); el propi script
+# es idempotent (si es torna a executar, no duplica res).
+on:
+  workflow_dispatch:
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instal·lar dependencies
+        run: pip install -r scripts/requirements.txt
+      - name: Importar tasques de Notion
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: python scripts/import_notion_once.py

@@ -1,0 +1,347 @@
+[
+  {
+    "title": "Comanda BonPreu",
+    "startDate": "2026-07-05",
+    "startTime": "",
+    "endDate": "2026-07-05",
+    "endTime": "",
+    "status": "pendent",
+    "tags": [],
+    "createdRaw": "July 5, 2026 12:05 AM",
+    "createdIso": "2026-07-05T00:05:00",
+    "organitzacio": "Altres",
+    "dueRaw": "July 5, 2026"
+  },
+  {
+    "title": "Repassar Bonpreu",
+    "startDate": "2026-07-06",
+    "startTime": "20:30",
+    "endDate": "2026-07-06",
+    "endTime": "20:35",
+    "status": "pendent",
+    "tags": [],
+    "createdRaw": "January 22, 2026 8:33 PM",
+    "createdIso": "2026-01-22T20:33:00",
+    "organitzacio": "",
+    "dueRaw": "July 6, 2026 20:30 (GMT+2) → 20:35"
+  },
+  {
+    "title": "Audiopacks Joan",
+    "startDate": "2026-07-07",
+    "startTime": "09:00",
+    "endDate": "2026-07-07",
+    "endTime": "10:00",
+    "status": "pendent",
+    "tags": [
+      "familiar"
+    ],
+    "createdRaw": "October 24, 2025 9:43 AM",
+    "createdIso": "2025-10-24T09:43:00",
+    "organitzacio": "Altres",
+    "dueRaw": "July 7, 2026 9:00 (GMT+2) → 10:00"
+  },
+  {
+    "title": "Audiopacks Joan y mamen",
+    "startDate": "2026-07-07",
+    "startTime": "09:00",
+    "endDate": "2026-07-07",
+    "endTime": "10:00",
+    "status": "pendent",
+    "tags": [],
+    "createdRaw": "January 22, 2026 8:33 PM",
+    "createdIso": "2026-01-22T20:33:00",
+    "organitzacio": "",
+    "dueRaw": "July 7, 2026 9:00 (GMT+2) → 10:00"
+  },
+  {
+    "title": "Audiopacks",
+    "startDate": "2026-07-07",
+    "startTime": "09:00",
+    "endDate": "2026-07-07",
+    "endTime": "10:00",
+    "status": "pendent",
+    "tags": [],
+    "createdRaw": "January 22, 2026 8:33 PM",
+    "createdIso": "2026-01-22T20:33:00",
+    "organitzacio": "",
+    "dueRaw": "July 7, 2026 9:00 (GMT+2) → 10:00"
+  },
+  {
+    "title": "Audiopacks",
+    "startDate": "2026-07-07",
+    "startTime": "09:00",
+    "endDate": "2026-07-07",
+    "endTime": "10:00",
+    "status": "pendent",
+    "tags": [],
+    "createdRaw": "January 22, 2026 8:33 PM",
+    "createdIso": "2026-01-22T20:33:00",
+    "organitzacio": "",
+    "dueRaw": "July 7, 2026 9:00 (GMT+2) → 10:00"
+  },
+  {
+    "title": "Audiopacks M",
+    "startDate": "2026-07-07",
+    "startTime": "09:00",
+    "endDate": "2026-07-07",
+    "endTime": "10:00",
+    "status": "pendent",
+    "tags": [
+      "familiar"
+    ],
+    "createdRaw": "February 13, 2026 11:22 AM",
+    "createdIso": "2026-02-13T11:22:00",
+    "organitzacio": "Altres",
+    "dueRaw": "July 7, 2026 9:00 (GMT+2) → 10:00"
+  },
+  {
+    "title": "Infermer",
+    "startDate": "2026-07-07",
+    "startTime": "16:10",
+    "endDate": "2026-07-07",
+    "endTime": "16:10",
+    "status": "pendent",
+    "tags": [
+      "familiar"
+    ],
+    "createdRaw": "June 25, 2026 3:46 PM",
+    "createdIso": "2026-06-25T15:46:00",
+    "organitzacio": "Altres",
+    "dueRaw": "July 7, 2026 16:10 (GMT+2)"
+  },
+  {
+    "title": "Repassar Bonpreu",
+    "startDate": "2026-07-13",
+    "startTime": "20:30",
+    "endDate": "2026-07-13",
+    "endTime": "20:35",
+    "status": "pendent",
+    "tags": [],
+    "createdRaw": "January 22, 2026 8:33 PM",
+    "createdIso": "2026-01-22T20:33:00",
+    "organitzacio": "",
+    "dueRaw": "July 13, 2026 20:30 (GMT+2) → 20:35"
+  },
+  {
+    "title": "Fisioterapia",
+    "startDate": "2026-07-13",
+    "startTime": "16:00",
+    "endDate": "2026-07-13",
+    "endTime": "16:00",
+    "status": "pendent",
+    "tags": [
+      "familiar"
+    ],
+    "createdRaw": "June 23, 2026 11:07 AM",
+    "createdIso": "2026-06-23T11:07:00",
+    "organitzacio": "Guttmann",
+    "dueRaw": "July 13, 2026 16:00 (GMT+2)"
+  },
+  {
+    "title": "Espona",
+    "startDate": "2026-07-15",
+    "startTime": "15:00",
+    "endDate": "2026-07-15",
+    "endTime": "16:00",
+    "status": "pendent",
+    "tags": [
+      "familiar"
+    ],
+    "createdRaw": "June 18, 2026 8:52 AM",
+    "createdIso": "2026-06-18T08:52:00",
+    "organitzacio": "Guttmann",
+    "dueRaw": "July 15, 2026 15:00 (GMT+2) → 16:00"
+  },
+  {
+    "title": "Escribano",
+    "startDate": "2026-07-15",
+    "startTime": "16:00",
+    "endDate": "2026-07-15",
+    "endTime": "17:00",
+    "status": "pendent",
+    "tags": [
+      "familiar"
+    ],
+    "createdRaw": "June 18, 2026 8:53 AM",
+    "createdIso": "2026-06-18T08:53:00",
+    "organitzacio": "Guttmann",
+    "dueRaw": "July 15, 2026 16:00 (GMT+2) → 17:00"
+  },
+  {
+    "title": "Cumple Joan",
+    "startDate": "2026-07-17",
+    "startTime": "",
+    "endDate": "2026-07-17",
+    "endTime": "",
+    "status": "pendent",
+    "tags": [],
+    "createdRaw": "January 22, 2026 8:33 PM",
+    "createdIso": "2026-01-22T20:33:00",
+    "organitzacio": "",
+    "dueRaw": "July 17, 2026"
+  },
+  {
+    "title": "Cumple Joan",
+    "startDate": "2026-07-17",
+    "startTime": "",
+    "endDate": "2026-07-17",
+    "endTime": "",
+    "status": "pendent",
+    "tags": [],
+    "createdRaw": "April 11, 2026 4:41 PM",
+    "createdIso": "2026-04-11T16:41:00",
+    "organitzacio": "",
+    "dueRaw": "July 17, 2026"
+  },
+  {
+    "title": "Repassar Bonpreu",
+    "startDate": "2026-07-20",
+    "startTime": "20:30",
+    "endDate": "2026-07-20",
+    "endTime": "20:35",
+    "status": "pendent",
+    "tags": [],
+    "createdRaw": "January 22, 2026 8:33 PM",
+    "createdIso": "2026-01-22T20:33:00",
+    "organitzacio": "",
+    "dueRaw": "July 20, 2026 20:30 (GMT+2) → 20:35"
+  },
+  {
+    "title": "IOMESDE",
+    "startDate": "2026-07-21",
+    "startTime": "11:10",
+    "endDate": "2026-07-21",
+    "endTime": "11:10",
+    "status": "pendent",
+    "tags": [
+      "familiar"
+    ],
+    "createdRaw": "June 16, 2026 12:19 PM",
+    "createdIso": "2026-06-16T12:19:00",
+    "organitzacio": "Altres",
+    "dueRaw": "July 21, 2026 11:10 (GMT+2)"
+  },
+  {
+    "title": "Optometrista",
+    "startDate": "2026-07-23",
+    "startTime": "12:00",
+    "endDate": "2026-07-23",
+    "endTime": "13:00",
+    "status": "pendent",
+    "tags": [
+      "familiar"
+    ],
+    "createdRaw": "June 26, 2026 8:10 AM",
+    "createdIso": "2026-06-26T08:10:00",
+    "organitzacio": "Guttmann",
+    "dueRaw": "July 23, 2026 12:00 (GMT+2) → 13:00"
+  },
+  {
+    "title": "Nou gos",
+    "startDate": "2026-08-04",
+    "startTime": "13:00",
+    "endDate": "2026-08-04",
+    "endTime": "13:00",
+    "status": "pendent",
+    "tags": [
+      "familiar"
+    ],
+    "createdRaw": "June 19, 2026 12:10 PM",
+    "createdIso": "2026-06-19T12:10:00",
+    "organitzacio": "Altres",
+    "dueRaw": "August 4, 2026 13:00 (GMT+2)"
+  },
+  {
+    "title": "Cumple Enzo",
+    "startDate": "2026-08-24",
+    "startTime": "09:00",
+    "endDate": "2026-08-24",
+    "endTime": "10:00",
+    "status": "pendent",
+    "tags": [],
+    "createdRaw": "April 11, 2026 4:41 PM",
+    "createdIso": "2026-04-11T16:41:00",
+    "organitzacio": "",
+    "dueRaw": "August 24, 2026 9:00 (GMT+2) → 10:00"
+  },
+  {
+    "title": "Cumple Violant",
+    "startDate": "2026-09-14",
+    "startTime": "",
+    "endDate": "2026-09-14",
+    "endTime": "",
+    "status": "pendent",
+    "tags": [],
+    "createdRaw": "April 11, 2026 4:41 PM",
+    "createdIso": "2026-04-11T16:41:00",
+    "organitzacio": "",
+    "dueRaw": "September 14, 2026"
+  },
+  {
+    "title": "Aniversari Boda Pares/Avis",
+    "startDate": "2026-09-23",
+    "startTime": "",
+    "endDate": "2026-09-23",
+    "endTime": "",
+    "status": "pendent",
+    "tags": [],
+    "createdRaw": "April 11, 2026 4:41 PM",
+    "createdIso": "2026-04-11T16:41:00",
+    "organitzacio": "",
+    "dueRaw": "September 23, 2026"
+  },
+  {
+    "title": "Podòleg",
+    "startDate": "2026-10-21",
+    "startTime": "10:30",
+    "endDate": "2026-10-21",
+    "endTime": "11:00",
+    "status": "pendent",
+    "tags": [
+      "familiar"
+    ],
+    "createdRaw": "October 15, 2025 10:34 AM",
+    "createdIso": "2025-10-15T10:34:00",
+    "organitzacio": "Altres",
+    "dueRaw": "October 21, 2026 10:30 (GMT+2) → 11:00"
+  },
+  {
+    "title": "Amortització",
+    "startDate": "2026-11-30",
+    "startTime": "",
+    "endDate": "2026-11-30",
+    "endTime": "",
+    "status": "pendent",
+    "tags": [],
+    "createdRaw": "April 13, 2026 7:47 PM",
+    "createdIso": "2026-04-13T19:47:00",
+    "organitzacio": "Altres",
+    "dueRaw": "November 30, 2026"
+  },
+  {
+    "title": "MyChannels",
+    "startDate": "2027-03-11",
+    "startTime": "",
+    "endDate": "2027-03-11",
+    "endTime": "",
+    "status": "pendent",
+    "tags": [],
+    "createdRaw": "March 12, 2026 3:45 PM",
+    "createdIso": "2026-03-12T15:45:00",
+    "organitzacio": "Altres",
+    "dueRaw": "March 11, 2027"
+  },
+  {
+    "title": "MyHeritage",
+    "startDate": "2027-04-20",
+    "startTime": "",
+    "endDate": "2027-04-20",
+    "endTime": "",
+    "status": "pendent",
+    "tags": [],
+    "createdRaw": "April 26, 2026 12:34 PM",
+    "createdIso": "2026-04-26T12:34:00",
+    "organitzacio": "Altres",
+    "dueRaw": "April 20, 2027"
+  }
+]
