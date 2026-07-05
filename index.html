@@ -2986,11 +2986,20 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask,onMoveTask,gcalToke
       .catch(()=>{if(!cancelled)setGcalError('No s\'han pogut carregar els esdeveniments de Google Calendar. Torna a connectar.');});
     return ()=>{cancelled=true;};
   },[gcalToken,rangeKey,JSON.stringify(activeGcalCalendars)]);
+  // Etiqueta d'hora per a una tasca dins del calendari: "09:00-10:00", nomes l'inici, nomes la fi, o buit (tot el dia).
+  const calTimeLabel = t => {
+    if (t.startTime && t.endTime && t.startTime!==t.endTime) return `${t.startTime}-${t.endTime}`;
+    return t.startTime || t.endTime || '';
+  };
   const tasksForDay = dateStr => tasks.filter(t=>{
     // Cada ocurrència d'una tasca recurrent es mostra només el seu propi dia
     if (t.seriesId) return t.endDate === dateStr;
     const start=t.startDate||t.endDate; const end=t.endDate||t.startDate;
     if(!start)return false; return start<=dateStr&&dateStr<=end;
+  }).sort((a,b)=>{
+    // Ordena per hora d'inici ascendent; les tasques sense hora (tot el dia) van primer.
+    const ta = a.startTime||a.endTime||''; const tb = b.startTime||b.endTime||'';
+    return ta<tb?-1:ta>tb?1:0;
   });
   const gcalForDay = dateStr => gcalEvents.filter(e=>e.dateStr===dateStr);
   const monthName = firstDay.toLocaleDateString('ca-ES',{month:'long',year:'numeric'});
@@ -3037,7 +3046,7 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask,onMoveTask,gcalToke
                   style={{background:color+'22',color}}
                   onPointerDown={e=>startChipDrag(e,t)}
                   onClick={e=>{e.stopPropagation(); if(suppressClickRef.current){suppressClickRef.current=false;return;} onSelectTask(t);setPopup(null);}}
-                  title={t.title}>{t.status==='completada'?'✓ ':overdue?'⚠ ':''}{t.title}</div>;
+                  title={t.title}>{t.status==='completada'?'✓ ':overdue?'⚠ ':''}{calTimeLabel(t)?`${calTimeLabel(t)} `:''}{t.title}</div>;
               })}
               {gcalVisible.map((e,i)=>(
                 <div key={`g${i}`} className="cal-task-chip cal-gcal-chip"
@@ -3054,6 +3063,7 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask,onMoveTask,gcalToke
                     const overdue=isOverdue(t);
                     return <div key={t.id} className="cal-popup-task" onClick={()=>{onSelectTask(t);setPopup(null);}}>
                       <span className={`priority-dot p-${t.priority}`}/>
+                      {calTimeLabel(t)&&<span style={{fontSize:10,color:'var(--text3)',minWidth:36}}>{calTimeLabel(t)}</span>}
                       <span style={{flex:1,color:overdue?'var(--danger)':undefined}}>{overdue?'⚠ ':''}{t.title}</span>
                       {list&&<span style={{fontSize:10,color:list.color}}>{list.name}</span>}
                     </div>;
