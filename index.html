@@ -1185,13 +1185,16 @@ function App() {
   }).length;
   const isWatchedView = typeof selectedList==='string' && selectedList.startsWith('watched:');
   const watchedOwnerId = isWatchedView ? selectedList.slice(8) : null;
+  // Resolt l'email d'un uid: primer l'ownerEmail guardat a la tasca (tasques noves),
+  // si no, el cerca al directori d'usuaris (tasques antigues sense ownerEmail); si tampoc, l'uid en cru.
+  const emailForUid = (uid, knownEmail) => knownEmail || allUsers.find(u=>u.uid===uid)?.email || uid;
   const listName = selectedList==='all'?'Totes les tasques'
     :selectedList==='today'?'Avui'
     :selectedList==='tomorrow'?'Demà'
     :selectedList==='next3'?'Pròxims 3 dies'
     :selectedList==='next7'?'Pròxims 7 dies'
     :selectedList==='seguiment'?'Seguiment'
-    :isWatchedView?`Informat per ${watchedTasks.find(t=>t.ownerId===watchedOwnerId)?.ownerEmail||''}`
+    :isWatchedView?`Informat per ${emailForUid(watchedOwnerId, watchedTasks.find(t=>t.ownerId===watchedOwnerId)?.ownerEmail)}`
     :lists.find(l=>l.id===selectedList)?.name??'';
 
   return (
@@ -1299,7 +1302,7 @@ function App() {
             <div className="sidebar-section">
               <div className="sidebar-section-title">Informat per</div>
               {[...new Set(watchedTasks.map(t=>t.ownerId))].map(ownerId=>{
-                const ownerEmail = watchedTasks.find(t=>t.ownerId===ownerId)?.ownerEmail || ownerId;
+                const ownerEmail = emailForUid(ownerId, watchedTasks.find(t=>t.ownerId===ownerId)?.ownerEmail);
                 const count = watchedTasks.filter(t=>t.ownerId===ownerId&&t.status!=='completada').length;
                 return (
                   <SidebarItem key={ownerId} icon={Ic.eye} label={ownerEmail} count={count}
@@ -1515,7 +1518,7 @@ function App() {
         </div>
 
         {selectedTask&&(isWatchedView||(selectedTask.ownerId!==user.uid&&(selectedTask.watchers||[]).includes(user.uid)) ? (
-          <WatchedTaskPanel task={selectedTask} lists={lists}
+          <WatchedTaskPanel task={selectedTask} lists={lists} allUsers={allUsers}
             onClose={()=>setSelectedTask(null)}
             onRemoveSelf={async()=>{await removeWatcher(selectedTask.id,user.uid);setSelectedTask(null);}}/>
         ) : (
@@ -1994,10 +1997,11 @@ function WatcherSection({taskId,watchers,watcherEmails,onInvite,onRemove,allUser
 }
 
 // ─── WATCHED TASK PANEL (només lectura, per a qui ha estat convidat) ─────────
-function WatchedTaskPanel({task,lists,onClose,onRemoveSelf}) {
+function WatchedTaskPanel({task,lists,allUsers,onClose,onRemoveSelf}) {
   const list  = lists.find(l=>l.id===task.listId);
   const total = task.subtasks?.length??0;
   const doneN = task.subtasks?.filter(s=>s.done).length??0;
+  const ownerLabel = task.ownerEmail || (allUsers||[]).find(u=>u.uid===task.ownerId)?.email || 'algú altre';
   return (
     <div className="detail-panel">
       <div className="detail-header">
@@ -2006,7 +2010,7 @@ function WatchedTaskPanel({task,lists,onClose,onRemoveSelf}) {
       </div>
       <div className="detail-body">
         <div style={{padding:'8px 10px',background:'rgba(79,142,247,.08)',border:'1px solid rgba(79,142,247,.2)',borderRadius:8,fontSize:12,color:'var(--text2)'}}>
-          Estàs informat d'aquesta tasca de {task.ownerEmail||'algú altre'}. No la pots editar ni completar.
+          Estàs informat d'aquesta tasca de {ownerLabel}. No la pots editar ni completar.
         </div>
         <div className="detail-field">
           <label>Títol</label>
