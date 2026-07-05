@@ -1681,7 +1681,7 @@ function App() {
               onClose={()=>setSelectedTask(null)}
               onToggleStatus={()=>toggleStatus(selectedTask.id,selectedTask.status)}/>
           ) : (
-            <DetailPanel task={selectedTask} lists={lists} defaultFields={defaultFields}
+            <DetailPanel task={selectedTask} lists={lists} defaultFields={defaultFields} allTags={allTags}
               currentUserUid={user.uid} currentUserEmail={user.email}
               onUpdate={updateTask} onDelete={canDeleteTask(selectedTask)?()=>requestDelete(selectedTask):null}
               onClose={()=>setSelectedTask(null)} onDelay={delayTask}
@@ -1800,7 +1800,7 @@ function TaskItem({task,lists,selected,onClick,onToggle,onDelete,onDelay,onTrack
 }
 
 // ─── DETAIL PANEL ─────────────────────────────────────────────────────────────
-function DetailPanel({task,lists,defaultFields,currentUserUid,currentUserEmail,onUpdate,onDelete,onClose,onDelay,onInviteWatcher,onRemoveWatcher,onAssign,onUnassign,allUsers}) {
+function DetailPanel({task,lists,defaultFields,allTags,currentUserUid,currentUserEmail,onUpdate,onDelete,onClose,onDelay,onInviteWatcher,onRemoveWatcher,onAssign,onUnassign,allUsers}) {
   const [local,setLocal] = useState(task);
   const [tagInput,setTagInput] = useState('');
   const timer = useRef(null);
@@ -2029,6 +2029,13 @@ function DetailPanel({task,lists,defaultFields,currentUserUid,currentUserEmail,o
                 if(e.key==='Backspace'&&!tagInput&&(local.tags||[]).length)removeTag((local.tags||[]).at(-1));
               }}/>
           </div>
+          {(()=>{const existing=(allTags||[]).filter(t=>!(local.tags||[]).includes(t)); return existing.length>0&&(
+            <select className="detail-select" style={{marginTop:6}} value=""
+              onChange={e=>{if(e.target.value)addTag(e.target.value);}}>
+              <option value="">+ Etiqueta ja feta servir…</option>
+              {existing.map(t=><option key={t} value={t}>{t}</option>)}
+            </select>
+          );})()}
         </div>
         <div className="detail-field">
           <label>Adjuncions ({(local.attachments||[]).length})</label>
