@@ -472,6 +472,13 @@ const saveGcalToken = (token,expiresInSec) => {
   localStorage.setItem(GCAL_EXPIRY_KEY, String(Date.now()+expiresInSec*1000));
 };
 const clearGcalToken = () => { localStorage.removeItem(GCAL_TOKEN_KEY); localStorage.removeItem(GCAL_EXPIRY_KEY); };
+// Converteix un dateTime ISO de l'API de Google (pot venir en UTC amb "Z" o amb offset) a "HH:MM" en hora local.
+const gcalDateTimeToLocalHHMM = dt => {
+  if (!dt) return '';
+  const d = new Date(dt);
+  if (isNaN(d)) return '';
+  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+};
 // Converteix un esdeveniment de l'API de Google Calendar a {dateStr, title, allDay, time}
 const gcalEventToDays = (ev, cal) => {
   const days = [];
@@ -492,7 +499,7 @@ const gcalEventToDays = (ev, cal) => {
   if (days.length===0) days.push(startStr);
   return days.map(dateStr=>({
     dateStr, title:ev.summary||'(sense títol)', allDay,
-    time: allDay?'':(ev.start?.dateTime||'').slice(11,16),
+    time: allDay?'':gcalDateTimeToLocalHHMM(ev.start?.dateTime),
     link: ev.htmlLink,
     color: cal?.color||'#4f8ef7', calLabel: cal?.label||'Google Calendar'
   }));
