@@ -575,6 +575,7 @@ const Ic = {
   clock:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
   bell:     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>,
   eye:      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>,
+  person:   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
   repeat:   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>,
   bookmark: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>,
   bmark:    <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>,
@@ -726,16 +727,22 @@ function App() {
 
   useEffect(()=>{
     if (!user) return;
-    const _ownTasks=[],_sharedTasks=[],_ownLists=[],_sharedLists=[];
+    const _ownTasks=[],_sharedTasks=[],_assignedTasks=[],_ownLists=[],_sharedLists=[];
     let sharedTasksUnsub=()=>{};
     const sortTasks=arr=>arr.slice().sort((a,b)=>(b.createdAt?.toMillis?.()??0)-(a.createdAt?.toMillis?.()??0));
     const sortLists=arr=>arr.slice().sort((a,b)=>(a.createdAt?.toMillis?.()??0)-(b.createdAt?.toMillis?.()??0));
     const dedup=arr=>{const s=new Set();return arr.filter(x=>!s.has(x.id)&&s.add(x.id));};
-    const mergeTasks=()=>setTasks(sortTasks(dedup([..._ownTasks,..._sharedTasks])));
+    const mergeTasks=()=>setTasks(sortTasks(dedup([..._ownTasks,..._sharedTasks,..._assignedTasks])));
     const mergeLists=()=>setLists(sortLists(dedup([..._ownLists,..._sharedLists])));
     const unsubT=db.collection('tasks').where('ownerId','==',user.uid)
       .onSnapshot(snap=>{
         _ownTasks.length=0;snap.docs.forEach(d=>_ownTasks.push({id:d.id,...d.data()}));
+        mergeTasks();
+      });
+    // Tasques d'altres persones que m'han assignat a mi (les puc veure i completar, no editar)
+    const unsubA=db.collection('tasks').where('assigneeId','==',user.uid)
+      .onSnapshot(snap=>{
+        _assignedTasks.length=0;snap.docs.forEach(d=>_assignedTasks.push({id:d.id,...d.data()}));
         mergeTasks();
       });
     const unsubL1=db.collection('lists').where('ownerId','==',user.uid)
@@ -772,7 +779,7 @@ function App() {
     // Directori d'usuaris registrats (per al desplegable de "Convida a informar")
     const unsubU=db.collection('users')
       .onSnapshot(snap=>{setAllUsers(snap.docs.map(d=>({uid:d.id,email:d.data().email})).filter(u=>u.email));});
-    return()=>{unsubT();unsubL1();unsubL2();unsubS();unsubCL();unsubW();unsubU();sharedTasksUnsub();};
+    return()=>{unsubT();unsubL1();unsubL2();unsubS();unsubCL();unsubW();unsubU();unsubA();sharedTasksUnsub();};
   },[user]);
 
   useEffect(()=>{
@@ -970,8 +977,16 @@ function App() {
   };
   const canDeleteTask = task => {
     const list = lists.find(l=>l.id===task?.listId);
-    if (!list) return true;                    // tasca personal sense llista
-    return list.ownerId===user.uid;            // nomes el propietari de la llista pot esborrar
+    if (list) return list.ownerId===user.uid;  // llista: nomes el propietari de la llista pot esborrar
+    return task?.ownerId===user.uid;            // sense llista: nomes el propietari de la tasca (mai l'assignat)
+  };
+  // Edicio completa (tots els camps): propietari de la tasca, o membre d'una llista compartida.
+  // L'assignat NOMES pot canviar l'estat (pendent/completada), no la resta de camps.
+  const canFullyEdit = task => {
+    if (!task) return false;
+    if (task.ownerId===user.uid) return true;
+    const list = lists.find(l=>l.id===task.listId);
+    return !!list && (list.sharedWith||[]).includes(user.uid);
   };
   const requestDelete = task => {
     if (task.seriesId) setDeleteConfirm(task);
@@ -998,7 +1013,7 @@ function App() {
   const toggleStatus = async (id,current) => {
     const task = tasks.find(t=>t.id===id); if (!task) return;
     if (current!=='completada') {
-      if (task.tracked) {
+      if (task.tracked && task.ownerId===user.uid) { // el seguiment nomes es del propietari; l'assignat no en genera
         await db.collection('completionLogs').add({
           ownerId:user.uid, taskId:id,
           seriesId:task.seriesId||null,
@@ -1119,10 +1134,35 @@ function App() {
     updates[`watcherEmails.${targetUid}`] = firebase.firestore.FieldValue.delete();
     await db.collection('tasks').doc(taskId).update(updates);
   };
+  // Assignar una tasca a una altra persona: pot completar-la, pero nomes el creador la pot editar.
+  const assignTask = async (taskId, email) => {
+    email = email.trim().toLowerCase();
+    const snap = await db.collection('users').where('email','==',email).get();
+    if (snap.empty) return 'No existeix cap usuari registrat amb aquest correu.';
+    const targetUid = snap.docs[0].id;
+    if (targetUid===user.uid) return 'No et pots assignar una tasca a tu mateix.';
+    await db.collection('tasks').doc(taskId).update({assigneeId:targetUid,assigneeEmail:email});
+    showToast('✓ Tasca assignada a '+email);
+    return null;
+  };
+  const unassignTask = async taskId => {
+    await db.collection('tasks').doc(taskId).update({
+      assigneeId: firebase.firestore.FieldValue.delete(),
+      assigneeEmail: firebase.firestore.FieldValue.delete()
+    });
+  };
 
   const allTags = [...new Set(tasks.flatMap(t=>t.tags||[]))];
+  // Vistes especials de "Informat per" / "Assignades a" / "Assignades per" (no son llistes reals)
+  const isWatchedView = typeof selectedList==='string' && selectedList.startsWith('watched:');
+  const isAssignedToView = typeof selectedList==='string' && selectedList.startsWith('assignedTo:'); // jo he assignat a algu (vist des del creador)
+  const isAssignedByView = typeof selectedList==='string' && selectedList.startsWith('assignedBy:'); // m'han assignat a mi (vist des de l'assignat)
+  const watchedOwnerId = isWatchedView ? selectedList.slice(8) : null;
+  const assignedToUid = isAssignedToView ? selectedList.slice(11) : null;
+  const assignedByUid = isAssignedByView ? selectedList.slice(11) : null;
+  const isPseudoList = isWatchedView || isAssignedToView || isAssignedByView;
   // Camps personalitzats de la llista seleccionada que es poden filtrar (select/checkbox)
-  const isSpecificList = !DATE_QUICK_VIEWS.includes(selectedList)&&selectedList!=='all'&&selectedList!=='seguiment';
+  const isSpecificList = !DATE_QUICK_VIEWS.includes(selectedList)&&selectedList!=='all'&&selectedList!=='seguiment'&&!isPseudoList;
   const customFilterFields = isSpecificList
     ? (lists.find(l=>l.id===selectedList)?.fields||[]).filter(f=>f.type==='select'||f.type==='checkbox')
     : [];
@@ -1144,6 +1184,12 @@ function App() {
     else if (selectedList==='tomorrow'){ if (taskDueStr(t)!==tomorrowStr) return false; }
     else if (selectedList==='next3'){ const d=taskDueStr(t); if(!d||d<today||d>threeDayLaterStr) return false; }
     else if (selectedList==='next7'){ const d=taskDueStr(t); if(!d||d<today||d>weekLaterStr) return false; }
+    else if (typeof selectedList==='string'&&selectedList.startsWith('assignedTo:')){
+      const uid=selectedList.slice(11); if(t.ownerId!==user.uid||t.assigneeId!==uid) return false;
+    }
+    else if (typeof selectedList==='string'&&selectedList.startsWith('assignedBy:')){
+      const uid=selectedList.slice(11); if(t.assigneeId!==user.uid||t.ownerId!==uid) return false;
+    }
     else if (selectedList!=='all'&&selectedList!=='seguiment'){if(t.listId!==selectedList)return false;}
     if (!matchesGroup(t)) return false;
     if (filterStatus!=='all'&&t.status!==filterStatus) return false;
@@ -1183,8 +1229,6 @@ function App() {
     if (id==='next7') { const d=taskDueStr(t); return d&&d>=today&&d<=weekLaterStr; }
     return t.listId===id;
   }).length;
-  const isWatchedView = typeof selectedList==='string' && selectedList.startsWith('watched:');
-  const watchedOwnerId = isWatchedView ? selectedList.slice(8) : null;
   // Resolt l'email d'un uid: primer l'ownerEmail guardat a la tasca (tasques noves),
   // si no, el cerca al directori d'usuaris (tasques antigues sense ownerEmail); si tampoc, l'uid en cru.
   const emailForUid = (uid, knownEmail) => knownEmail || allUsers.find(u=>u.uid===uid)?.email || uid;
@@ -1195,6 +1239,8 @@ function App() {
     :selectedList==='next7'?'Pròxims 7 dies'
     :selectedList==='seguiment'?'Seguiment'
     :isWatchedView?`Informat per ${emailForUid(watchedOwnerId, watchedTasks.find(t=>t.ownerId===watchedOwnerId)?.ownerEmail)}`
+    :isAssignedToView?`Assignades a ${emailForUid(assignedToUid, tasks.find(t=>t.assigneeId===assignedToUid)?.assigneeEmail)}`
+    :isAssignedByView?`Assignades per ${emailForUid(assignedByUid, tasks.find(t=>t.ownerId===assignedByUid)?.ownerEmail)}`
     :lists.find(l=>l.id===selectedList)?.name??'';
 
   return (
@@ -1312,6 +1358,42 @@ function App() {
               })}
             </div>
           )}
+          {(() => {
+            const assignedOutTasks = tasks.filter(t=>t.ownerId===user.uid && t.assigneeId);
+            if (!assignedOutTasks.length) return null;
+            return (
+              <div className="sidebar-section">
+                <div className="sidebar-section-title">Assignades a</div>
+                {[...new Set(assignedOutTasks.map(t=>t.assigneeId))].map(uid=>{
+                  const email = emailForUid(uid, assignedOutTasks.find(t=>t.assigneeId===uid)?.assigneeEmail);
+                  const count = assignedOutTasks.filter(t=>t.assigneeId===uid&&t.status!=='completada').length;
+                  return (
+                    <SidebarItem key={uid} icon={Ic.person} label={email} count={count}
+                      active={selectedList===`assignedTo:${uid}`}
+                      onClick={()=>{setSelectedList(`assignedTo:${uid}`);setSidebarOpen(false)}}/>
+                  );
+                })}
+              </div>
+            );
+          })()}
+          {(() => {
+            const assignedToMeTasks = tasks.filter(t=>t.assigneeId===user.uid && t.ownerId!==user.uid);
+            if (!assignedToMeTasks.length) return null;
+            return (
+              <div className="sidebar-section">
+                <div className="sidebar-section-title">Assignades per</div>
+                {[...new Set(assignedToMeTasks.map(t=>t.ownerId))].map(uid=>{
+                  const email = emailForUid(uid, assignedToMeTasks.find(t=>t.ownerId===uid)?.ownerEmail);
+                  const count = assignedToMeTasks.filter(t=>t.ownerId===uid&&t.status!=='completada').length;
+                  return (
+                    <SidebarItem key={uid} icon={Ic.person} label={email} count={count}
+                      active={selectedList===`assignedBy:${uid}`}
+                      onClick={()=>{setSelectedList(`assignedBy:${uid}`);setSidebarOpen(false)}}/>
+                  );
+                })}
+              </div>
+            );
+          })()}
           <div style={{flex:1}}/>
           <div style={{padding:'10px 8px',borderTop:'1px solid var(--border)'}}>
             <button className="sidebar-item" style={{width:'100%',color:'var(--text3)'}}
@@ -1465,6 +1547,8 @@ function App() {
             {view==='gantt' ? (
               <GanttView tasks={tasks} lists={lists}
                 defaultList={isSpecificList?selectedList:'all'}
+                assignedFilter={isAssignedToView?{type:'to',uid:assignedToUid}:isAssignedByView?{type:'by',uid:assignedByUid}:null}
+                currentUserUid={user.uid}
                 selectedTask={selectedTask} onSelectTask={setSelectedTask} onUpdateDates={updateTaskDates}/>
             ) : view==='calendar' ? (
               <CalendarView tasks={filtered} lists={lists} selectedTask={selectedTask} onSelectTask={setSelectedTask} onMoveTask={moveTaskToDate}
@@ -1497,7 +1581,7 @@ function App() {
                     {grpTasks.map(t=><TaskItem key={t.id} task={t} lists={lists}
                       selected={selectedTask?.id===t.id} onClick={()=>setSelectedTask(t)}
                       onToggle={()=>toggleStatus(t.id,t.status)} onDelete={canDeleteTask(t)?()=>requestDelete(t):null}
-                      onDelay={(task,type)=>delayTask(task,type)} onTrack={toggleTrack}/>)}
+                      onDelay={(task,type)=>delayTask(task,type)} onTrack={toggleTrack} assignedOnly={!canFullyEdit(t)}/>)}
                   </div>
                 );
               })}
@@ -1510,24 +1594,31 @@ function App() {
                 {completades.map(t=><TaskItem key={t.id} task={t} lists={lists}
                   selected={selectedTask?.id===t.id} onClick={()=>setSelectedTask(t)}
                   onToggle={()=>toggleStatus(t.id,t.status)} onDelete={canDeleteTask(t)?()=>deleteTask(t.id):null}
-                  onDelay={(task,type)=>delayTask(task,type)} onTrack={toggleTrack}/>)}
+                  onDelay={(task,type)=>delayTask(task,type)} onTrack={toggleTrack} assignedOnly={!canFullyEdit(t)}/>)}
               </>}
             </div>
             )}
           </>)}
         </div>
 
-        {selectedTask&&(isWatchedView||(selectedTask.ownerId!==user.uid&&(selectedTask.watchers||[]).includes(user.uid)) ? (
-          <WatchedTaskPanel task={selectedTask} lists={lists} allUsers={allUsers}
-            onClose={()=>setSelectedTask(null)}
-            onRemoveSelf={async()=>{await removeWatcher(selectedTask.id,user.uid);setSelectedTask(null);}}/>
-        ) : (
-          <DetailPanel task={selectedTask} lists={lists} defaultFields={defaultFields}
-            currentUserUid={user.uid} currentUserEmail={user.email}
-            onUpdate={updateTask} onDelete={canDeleteTask(selectedTask)?()=>requestDelete(selectedTask):null}
-            onClose={()=>setSelectedTask(null)} onDelay={delayTask}
-            onInviteWatcher={inviteToTask} onRemoveWatcher={removeWatcher} allUsers={allUsers}/>
-        ))}
+        {selectedTask&&(
+          (isWatchedView||(!canFullyEdit(selectedTask)&&(selectedTask.watchers||[]).includes(user.uid))) ? (
+            <WatchedTaskPanel task={selectedTask} lists={lists} allUsers={allUsers}
+              onClose={()=>setSelectedTask(null)}
+              onRemoveSelf={async()=>{await removeWatcher(selectedTask.id,user.uid);setSelectedTask(null);}}/>
+          ) : (!canFullyEdit(selectedTask)&&selectedTask.assigneeId===user.uid) ? (
+            <AssignedTaskPanel task={selectedTask} lists={lists} allUsers={allUsers}
+              onClose={()=>setSelectedTask(null)}
+              onToggleStatus={()=>toggleStatus(selectedTask.id,selectedTask.status)}/>
+          ) : (
+            <DetailPanel task={selectedTask} lists={lists} defaultFields={defaultFields}
+              currentUserUid={user.uid} currentUserEmail={user.email}
+              onUpdate={updateTask} onDelete={canDeleteTask(selectedTask)?()=>requestDelete(selectedTask):null}
+              onClose={()=>setSelectedTask(null)} onDelay={delayTask}
+              onInviteWatcher={inviteToTask} onRemoveWatcher={removeWatcher}
+              onAssign={assignTask} onUnassign={unassignTask} allUsers={allUsers}/>
+          )
+        )}
       </div>
 
       {showModal&&<NewTaskModal lists={lists} defaultFields={defaultFields}
@@ -1570,7 +1661,7 @@ function SidebarItem({icon,dot,label,count,active,onClick,onSettings,onDelete,sh
 }
 
 // ─── TASK ITEM ────────────────────────────────────────────────────────────────
-function TaskItem({task,lists,selected,onClick,onToggle,onDelete,onDelay,onTrack,readOnly}) {
+function TaskItem({task,lists,selected,onClick,onToggle,onDelete,onDelay,onTrack,readOnly,assignedOnly}) {
   const [hover,setHover] = useState(false);
   const done  = task.status==='completada';
   const list  = lists.find(l=>l.id===task.listId);
@@ -1602,6 +1693,8 @@ function TaskItem({task,lists,selected,onClick,onToggle,onDelete,onDelay,onTrack
           {recLabel&&<span className="recurrence-chip">🔁 {recLabel}</span>}
           {task.reminderMinutes>0&&<span className="task-meta-item" title="Recordatori actiu">{Ic.bell}</span>}
           {list&&<span className="task-meta-item" style={{color:list.color}}>{Ic.folder} {list.name}</span>}
+          {assignedOnly&&<span className="task-meta-item" title="Tasca assignada a mi" style={{color:'var(--accent)'}}>{Ic.person} Assignada a mi</span>}
+          {!assignedOnly&&task.assigneeEmail&&<span className="task-meta-item" title="Assignada a algu">{Ic.person} {task.assigneeEmail}</span>}
           {(task.tags||[]).map(tag=>{const c=tagColor(tag);return <span key={tag} className="tag" style={{background:c.bg,color:c.text}}>{tag}</span>;})}
           {total>0&&<span className="task-meta-item">{doneN}/{total}</span>}
         </div>
@@ -1609,6 +1702,8 @@ function TaskItem({task,lists,selected,onClick,onToggle,onDelete,onDelay,onTrack
       </div>
       {readOnly ? (
         <span title="Només lectura" style={{color:'var(--text3)',flexShrink:0,display:'flex',alignItems:'center',width:14,height:14}}>{Ic.eye}</span>
+      ) : assignedOnly ? (
+        <span title="Assignada — nomes pots completar-la" style={{color:'var(--text3)',flexShrink:0,display:'flex',alignItems:'center',width:14,height:14}}>{Ic.person}</span>
       ) : (
       <div className="task-actions">
         <button className={`track-btn ${task.tracked?'on':''}`} title={task.tracked?'Deixar de seguir':'Seguir tasca'}
@@ -1629,7 +1724,7 @@ function TaskItem({task,lists,selected,onClick,onToggle,onDelete,onDelay,onTrack
 }
 
 // ─── DETAIL PANEL ─────────────────────────────────────────────────────────────
-function DetailPanel({task,lists,defaultFields,currentUserUid,currentUserEmail,onUpdate,onDelete,onClose,onDelay,onInviteWatcher,onRemoveWatcher,allUsers}) {
+function DetailPanel({task,lists,defaultFields,currentUserUid,currentUserEmail,onUpdate,onDelete,onClose,onDelay,onInviteWatcher,onRemoveWatcher,onAssign,onUnassign,allUsers}) {
   const [local,setLocal] = useState(task);
   const [tagInput,setTagInput] = useState('');
   const timer = useRef(null);
@@ -1932,11 +2027,65 @@ function DetailPanel({task,lists,defaultFields,currentUserUid,currentUserEmail,o
         </div>
         )}
         {local.ownerId===currentUserUid && (
+          <AssignSection taskId={local.id} assigneeId={local.assigneeId||''} assigneeEmail={local.assigneeEmail||''}
+            onAssign={onAssign} onUnassign={onUnassign} allUsers={allUsers} currentUserUid={currentUserUid}/>
+        )}
+        {local.ownerId===currentUserUid && (
           <WatcherSection taskId={local.id} watchers={local.watchers||[]} watcherEmails={local.watcherEmails||{}}
             onInvite={onInviteWatcher} onRemove={onRemoveWatcher}
             allUsers={allUsers} currentUserUid={currentUserUid}/>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── ASSIGN SECTION (Assignar tasca) ───────────────────────────────────────────
+function AssignSection({taskId,assigneeId,assigneeEmail,onAssign,onUnassign,allUsers,currentUserUid}) {
+  const [email,setEmail]     = useState('');
+  const [error,setError]     = useState('');
+  const [loading,setLoading] = useState(false);
+  const candidates = (allUsers||[]).filter(u=>u.uid!==currentUserUid);
+  const handleAssign = async () => {
+    if (!email.trim()) return;
+    setLoading(true); setError('');
+    const err = await onAssign(taskId, email.trim());
+    if (err) setError(err); else setEmail('');
+    setLoading(false);
+  };
+  return (
+    <div className="detail-field" style={{borderTop:'1px solid var(--border)',paddingTop:12}}>
+      <label>{Ic.person} Assigna a</label>
+      <p style={{fontSize:11,color:'var(--text3)',marginTop:-2,marginBottom:8}}>
+        L'assignat pot veure la tasca i marcar-la com a completada, pero nomes tu la pots editar.
+      </p>
+      {assigneeId ? (
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <div className="sidebar-avatar" style={{width:24,height:24,fontSize:10,flexShrink:0}}>
+            {(assigneeEmail?.[0]||'?').toUpperCase()}
+          </div>
+          <span style={{flex:1,fontSize:12,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{assigneeEmail||assigneeId}</span>
+          <button className="btn btn-ghost btn-icon" style={{color:'var(--danger)',padding:4}}
+            title="Desassignar" onClick={()=>onUnassign(taskId)}>{Ic.x}</button>
+        </div>
+      ) : candidates.length===0 ? (
+        <p style={{fontSize:12,color:'var(--text3)',padding:'6px 0'}}>
+          No hi ha cap altre usuari registrat a l'app per assignar.
+        </p>
+      ) : (
+        <div style={{display:'flex',gap:8}}>
+          <select className="input" value={email}
+            onChange={e=>{setEmail(e.target.value);setError('');}} style={{flex:1}}>
+            <option value="">— Selecciona una persona —</option>
+            {candidates.map(u=><option key={u.uid} value={u.email}>{u.email}</option>)}
+          </select>
+          <button className="btn btn-primary" style={{whiteSpace:'nowrap',padding:'7px 14px'}}
+            onClick={handleAssign} disabled={loading||!email.trim()}>
+            {loading?'...':'Assigna'}
+          </button>
+        </div>
+      )}
+      {error&&<p style={{color:'var(--danger)',fontSize:11,marginTop:4}}>{error}</p>}
     </div>
   );
 }
@@ -2069,6 +2218,83 @@ function WatchedTaskPanel({task,lists,allUsers,onClose,onRemoveSelf}) {
         <button className="btn btn-danger-soft" style={{marginTop:6}} onClick={onRemoveSelf}>
           Deixar d'estar informat d'aquesta tasca
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── ASSIGNED TASK PANEL (per a qui li han assignat la tasca) ────────────────
+function AssignedTaskPanel({task,lists,allUsers,onClose,onToggleStatus}) {
+  const list  = lists.find(l=>l.id===task.listId);
+  const total = task.subtasks?.length??0;
+  const doneN = task.subtasks?.filter(s=>s.done).length??0;
+  const done  = task.status==='completada';
+  const ownerLabel = task.ownerEmail || (allUsers||[]).find(u=>u.uid===task.ownerId)?.email || 'algú altre';
+  return (
+    <div className="detail-panel">
+      <div className="detail-header">
+        <h3>{Ic.person} Tasca assignada</h3>
+        <button className="btn btn-ghost btn-icon" onClick={onClose}>{Ic.x}</button>
+      </div>
+      <div className="detail-body">
+        <div style={{padding:'8px 10px',background:'rgba(79,142,247,.08)',border:'1px solid rgba(79,142,247,.2)',borderRadius:8,fontSize:12,color:'var(--text2)'}}>
+          {ownerLabel} t'ha assignat aquesta tasca. La pots marcar com a completada, pero nomes {ownerLabel} la pot editar.
+        </div>
+        <div className="detail-field">
+          <label>Estat</label>
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <div className={`task-check ${done?'checked':''}`} style={{cursor:'pointer'}} onClick={onToggleStatus}>{Ic.check}</div>
+            <span className={`status-badge s-${task.status}`}>{task.status==='en-curs'?'En curs':done?'Completada':'Pendent'}</span>
+          </div>
+        </div>
+        <div className="detail-field">
+          <label>Títol</label>
+          <div style={{fontSize:15,fontWeight:600}}>{task.title}</div>
+        </div>
+        {task.description&&(
+          <div className="detail-field">
+            <label>Descripció</label>
+            <div style={{fontSize:13,color:'var(--text2)',whiteSpace:'pre-wrap'}}>{task.description}</div>
+          </div>
+        )}
+        <div className="detail-field">
+          <label>Prioritat</label>
+          <div style={{display:'flex',alignItems:'center',gap:6,fontSize:13}}>
+            <span className={`priority-dot p-${task.priority}`}/>{task.priority}
+          </div>
+        </div>
+        {(task.startDate||task.endDate)&&(
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+            <div className="detail-field"><label>Inici</label><div style={{fontSize:13}}>{task.startDate?fmt(task.startDate):'—'}</div></div>
+            <div className="detail-field"><label>Fi</label><div style={{fontSize:13}}>{task.endDate?fmt(task.endDate):'—'}{task.endTime?' '+task.endTime:''}</div></div>
+          </div>
+        )}
+        {list&&(
+          <div className="detail-field"><label>Llista</label>
+            <div style={{fontSize:13,color:list.color,display:'flex',alignItems:'center',gap:4}}>{Ic.folder} {list.name}</div>
+          </div>
+        )}
+        {(task.tags||[]).length>0&&(
+          <div className="detail-field">
+            <label>Etiquetes</label>
+            <div style={{display:'flex',flexWrap:'wrap',gap:5}}>
+              {task.tags.map(tag=>{const c=tagColor(tag);return <span key={tag} className="tag" style={{background:c.bg,color:c.text}}>{tag}</span>;})}
+            </div>
+          </div>
+        )}
+        {total>0&&(
+          <div className="detail-field">
+            <label>Subtasques ({doneN}/{total})</label>
+            <div style={{display:'flex',flexDirection:'column',gap:5}}>
+              {task.subtasks.map(s=>(
+                <div key={s.id} style={{display:'flex',alignItems:'center',gap:6,fontSize:13}}>
+                  <span className={`subtask-check ${s.done?'checked':''}`} style={{cursor:'default'}}/>
+                  <span style={s.done?{textDecoration:'line-through',opacity:.5}:{}}>{s.title}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -3055,7 +3281,7 @@ function Heatmap({days, logs, color, period}) {
 }
 
 // ─── GANTT VIEW ───────────────────────────────────────────────────────────────
-function GanttView({tasks,lists,defaultList,selectedTask,onSelectTask,onUpdateDates}) {
+function GanttView({tasks,lists,defaultList,assignedFilter,currentUserUid,selectedTask,onSelectTask,onUpdateDates}) {
   const DAY_W=24, DAYS=60, ROW_H=38, LABEL_W=210;
   const [ganttList,setGanttList]=useState(defaultList||'all');
   const [offset,setOffset]=useState(0);
@@ -3124,7 +3350,10 @@ function GanttView({tasks,lists,defaultList,selectedTask,onSelectTask,onUpdateDa
   };
 
   const visibleTasks=tasks.filter(t=>{
-    if(ganttList!=='all'&&t.listId!==ganttList) return false;
+    if (assignedFilter) {
+      if (assignedFilter.type==='to' && !(t.ownerId===currentUserUid && t.assigneeId===assignedFilter.uid)) return false;
+      if (assignedFilter.type==='by' && !(t.assigneeId===currentUserUid && t.ownerId===assignedFilter.uid)) return false;
+    } else if (ganttList!=='all'&&t.listId!==ganttList) return false;
     const s=t.startDate||t.endDate;const e=t.endDate||t.startDate;
     return s&&e>=winStartStr&&s<=winEndStr;
   }).sort((a,b)=>(a.startDate||a.endDate||'').localeCompare(b.startDate||b.endDate||''));
@@ -3134,10 +3363,16 @@ function GanttView({tasks,lists,defaultList,selectedTask,onSelectTask,onUpdateDa
     <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0}}>
       {/* Toolbar */}
       <div style={{padding:'9px 16px',display:'flex',alignItems:'center',gap:8,borderBottom:'1px solid var(--border)',flexShrink:0}}>
-        <select className="input" style={{width:175}} value={ganttList} onChange={e=>setGanttList(e.target.value)}>
-          <option value="all">Totes les llistes</option>
-          {lists.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
-        </select>
+        {assignedFilter ? (
+          <span className="tag" style={{background:'rgba(79,142,247,.12)',color:'var(--accent)'}}>
+            {Ic.person} {assignedFilter.type==='to'?'Assignades a':'Assignades per'} — filtre actiu
+          </span>
+        ) : (
+          <select className="input" style={{width:175}} value={ganttList} onChange={e=>setGanttList(e.target.value)}>
+            <option value="all">Totes les llistes</option>
+            {lists.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+        )}
         <button className="btn btn-ghost" style={{padding:'5px 10px',fontSize:12}} onClick={()=>setOffset(o=>o-30)}>← Anterior</button>
         <button className="btn btn-ghost" style={{padding:'5px 10px',fontSize:12}} onClick={()=>setOffset(0)}>Avui</button>
         <button className="btn btn-ghost" style={{padding:'5px 10px',fontSize:12}} onClick={()=>setOffset(o=>o+30)}>Següent →</button>
