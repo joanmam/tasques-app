@@ -2567,7 +2567,7 @@ function GcalSettingsModal({calendars,onSave,onClose}) {
         <button className="btn btn-ghost" style={{marginTop:10}} onClick={add}>+ Afegir calendari</button>
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancel·lar</button>
-          <button className="btn btn-primary" onClick={()=>onSave(local.filter(c=>c.id.trim()).map(c=>({...c,label:c.label.trim()||c.id})))}>Guardar</button>
+          <button className="btn btn-primary" onClick={()=>onSave(local.filter(c=>c.id.trim()).map(c=>({...c,id:c.id.trim(),label:c.label.trim()||c.id.trim()})))}>Guardar</button>
         </div>
       </div>
     </div>
@@ -3056,11 +3056,17 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask,onMoveTask,gcalToke
   useEffect(()=>{
     if (!gcalToken || !activeGcalCalendars.length) { setGcalEvents([]); return; }
     let cancelled = false;
-    Promise.all(activeGcalCalendars.map(cal=>
+    Promise.allSettled(activeGcalCalendars.map(cal=>
       fetchGcalEvents(gcalToken, cal.id, cells[0].dateStr, cells[cells.length-1].dateStr, cal)
-        .catch(()=>{throw new Error('gcal-fetch-failed');})
-    )).then(results=>{if(!cancelled){setGcalEvents(results.flat());setGcalError('');}})
-      .catch(()=>{if(!cancelled)setGcalError('No s\'han pogut carregar els esdeveniments de Google Calendar. Torna a connectar.');});
+    )).then(results=>{
+      if (cancelled) return;
+      const ok = results.filter(r=>r.status==='fulfilled').flatMap(r=>r.value);
+      const failed = activeGcalCalendars.filter((_,i)=>results[i].status==='rejected');
+      setGcalEvents(ok);
+      setGcalError(failed.length
+        ? `No s'han pogut carregar els esdeveniments de: ${failed.map(c=>c.label||c.id).join(', ')}. Torna a connectar o revisa l'ID/permisos.`
+        : '');
+    });
     return ()=>{cancelled=true;};
   },[gcalToken,rangeKey,JSON.stringify(activeGcalCalendars)]);
   // Etiqueta d'hora per a una tasca dins del calendari: "09:00-10:00", nomes l'inici, nomes la fi, o buit (tot el dia).
