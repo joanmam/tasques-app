@@ -3146,10 +3146,9 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask,onMoveTask,gcalToke
               {visible.map(t=>{
                 const list=lists.find(l=>l.id===t.listId);
                 const overdue=isOverdue(t);
-                const color=overdue?'var(--danger)':(list?.color||'var(--accent)');
                 const chipBg=list?hexToRgba(list.color,.10):'rgba(79,142,247,.10)';
                 return <div key={t.id} className="cal-task-chip cal-task-chip-drag"
-                  style={{background:chipBg,color}}
+                  style={{background:chipBg,color:'var(--text)'}}
                   onPointerDown={e=>startChipDrag(e,t)}
                   onClick={e=>{e.stopPropagation(); if(suppressClickRef.current){suppressClickRef.current=false;return;} onSelectTask(t);setPopup(null);}}
                   title={t.title}>{t.status==='completada'?'✓ ':overdue?'⚠ ':''}{calTimeLabel(t)?`${calTimeLabel(t)} `:''}{t.title}</div>;
