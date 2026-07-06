@@ -1714,7 +1714,7 @@ function App() {
       </div>
 
       {showModal&&<NewTaskModal lists={lists} defaultFields={defaultFields}
-        defaultList={(!DATE_QUICK_VIEWS.includes(selectedList)&&selectedList!=='all'&&selectedList!=='seguiment')?selectedList:lists[0]?.id}
+        defaultList={(!DATE_QUICK_VIEWS.includes(selectedList)&&selectedList!=='all'&&selectedList!=='seguiment')?selectedList:(lists.find(l=>l.name==='Tasques')?.id||lists[0]?.id)}
         preFill={voicePreFill}
         onSave={addTask} onClose={()=>{setShowModal(false);setVoicePreFill(null);}}/>}
       {showListModal&&<NewListModal onSave={addList} onClose={()=>setShowListModal(false)} groups={presentGroups}/>}
@@ -3612,6 +3612,7 @@ function GanttView({tasks,lists,defaultList,assignedFilter,currentUserUid,select
     </div>
   );
 }
+
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
