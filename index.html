@@ -145,7 +145,7 @@
     .matrix-table th{background:var(--bg2);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);position:sticky;top:0;z-index:1;text-align:center}
     .matrix-table th:first-child,.matrix-table td:first-child{width:160px}
     .matrix-row-label{display:flex;align-items:center;gap:6px;font-weight:600}
-    .matrix-task-chip{display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px;margin-bottom:4px;cursor:pointer;font-size:12px;transition:filter .12s;border:1px solid transparent}
+    .matrix-task-chip{display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px;margin-bottom:4px;cursor:pointer;font-size:12px;font-weight:700;transition:filter .12s;border:1px solid transparent}
     .matrix-task-chip:hover{filter:brightness(1.15)}
     .matrix-task-chip.selected{border-color:var(--accent)}
     .matrix-task-chip.completada{opacity:.5;text-decoration:line-through}
@@ -162,7 +162,7 @@
     .task-check.checked svg{display:block}
     .task-check svg{display:none;width:10px;height:10px;color:white}
     .task-body{flex:1;min-width:0}
-    .task-title{font-size:14px;font-weight:500;margin-bottom:4px}
+    .task-title{font-size:15px;font-weight:700;margin-bottom:4px}
     .task-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
     .task-meta-item{display:flex;align-items:center;gap:3px;font-size:11px;color:var(--text3)}
     .task-meta-item svg{width:11px;height:11px}
@@ -287,7 +287,7 @@
     .cal-day.other-month{opacity:.4}
     .cal-day-num{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:50%}
     .cal-day.today .cal-day-num{background:var(--accent);color:white}
-    .cal-task-chip{font-size:10px;font-weight:500;padding:2px 6px;border-radius:4px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;transition:opacity .1s}
+    .cal-task-chip{font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;transition:opacity .1s}
     .cal-task-chip:hover{opacity:.75}
     .cal-task-chip-drag{cursor:grab;touch-action:none}
     .cal-task-chip-drag:active{cursor:grabbing}
@@ -1303,8 +1303,15 @@ function App() {
     }
     return true;
   });
-  const pendents    = filtered.filter(t=>t.status!=='completada');
-  const completades = filtered.filter(t=>t.status==='completada');
+  // Ordena per dia d'inici ascendent (i per hora d'inici com a desempat).
+  const byStartDate = (a,b) => {
+    const da=a.startDate||a.endDate||''; const db=b.startDate||b.endDate||'';
+    if (da!==db) return da<db?-1:1;
+    const ta=a.startTime||a.endTime||''; const tb=b.startTime||b.endTime||'';
+    return ta<tb?-1:ta>tb?1:0;
+  };
+  const pendents    = filtered.filter(t=>t.status!=='completada').sort(byStartDate);
+  const completades = filtered.filter(t=>t.status==='completada').sort(byStartDate);
   const countFor = id => tasks.filter(t=>{
     if (t.status==='completada') return false;
     if (!matchesGroup(t)) return false;
@@ -2966,7 +2973,7 @@ function MatrixView({tasks,lists,defaultFields,selectedTask,onSelectTask}) {
                     <td key={c} style={{background:rowBg}}>
                       {ts.length===0 ? <span className="matrix-empty-cell">—</span> : ts.map(t=>(
                         <div key={t.id} className={`matrix-task-chip ${selectedTask?.id===t.id?'selected':''} ${t.status==='completada'?'completada':''}`}
-                          onClick={()=>onSelectTask(t)} style={{background:hexToRgba(l.color,.22)}}>
+                          onClick={()=>onSelectTask(t)} style={{background:hexToRgba(l.color,.10)}}>
                           {t.title}
                         </div>
                       ))}
@@ -3140,8 +3147,9 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask,onMoveTask,gcalToke
                 const list=lists.find(l=>l.id===t.listId);
                 const overdue=isOverdue(t);
                 const color=overdue?'var(--danger)':(list?.color||'var(--accent)');
+                const chipBg=list?hexToRgba(list.color,.10):'rgba(79,142,247,.10)';
                 return <div key={t.id} className="cal-task-chip cal-task-chip-drag"
-                  style={{background:color+'22',color}}
+                  style={{background:chipBg,color}}
                   onPointerDown={e=>startChipDrag(e,t)}
                   onClick={e=>{e.stopPropagation(); if(suppressClickRef.current){suppressClickRef.current=false;return;} onSelectTask(t);setPopup(null);}}
                   title={t.title}>{t.status==='completada'?'✓ ':overdue?'⚠ ':''}{calTimeLabel(t)?`${calTimeLabel(t)} `:''}{t.title}</div>;
@@ -3558,11 +3566,11 @@ function GanttView({tasks,lists,defaultList,assignedFilter,currentUserUid,select
                 <div style={{
                   width:LABEL_W,minWidth:LABEL_W,flexShrink:0,display:'flex',alignItems:'center',gap:7,padding:'0 10px',
                   position:'sticky',left:0,zIndex:3,
-                  background:isSelected?'rgba(79,142,247,.08)':list?hexToRgba(color,.06):'var(--bg)',
+                  background:isSelected?'rgba(79,142,247,.15)':list?hexToRgba(color,.10):'var(--bg)',
                   borderRight:'1px solid var(--border)',overflow:'hidden',transition:'background .1s'
                 }}>
                   <span style={{width:7,height:7,borderRadius:'50%',background:color,flexShrink:0}}/>
-                  <span style={{fontSize:11,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',opacity:isDone?.45:1,fontWeight:isSelected?600:400}}>{t.title}</span>
+                  <span style={{fontSize:12,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',opacity:isDone?.45:1,fontWeight:700}}>{t.title}</span>
                 </div>
                 {/* Timeline */}
                 <div style={{flex:1,position:'relative',background:ti%2===0?'transparent':'rgba(0,0,0,.013)'}}>
