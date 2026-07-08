@@ -74,6 +74,7 @@
       .view-toggle{gap:1px}
       .view-btn{padding:5px 9px;font-size:0;gap:0}
       .view-btn span{display:inline-flex!important;width:14px;height:14px}
+      .search-box{width:96px}
       .topbar .btn-ghost{display:none}
       .topbar .btn-primary{display:none}
       .fab-new{display:flex!important;align-items:center;justify-content:center;position:fixed;right:18px;bottom:calc(20px + env(safe-area-inset-bottom,0px));width:56px;height:56px;border-radius:50%;background:var(--accent);color:#fff;border:none;box-shadow:0 6px 22px rgba(0,0,0,.32);z-index:150;cursor:pointer}
@@ -120,6 +121,14 @@
     .view-btn{padding:5px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:none;background:transparent;color:var(--text2);font-family:inherit;transition:all .15s;display:flex;align-items:center;gap:5px}
     .view-btn svg{width:13px;height:13px}
     .view-btn.active{background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+    .search-box{display:flex;align-items:center;gap:6px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:0 8px;height:32px;width:190px;flex-shrink:0}
+    .search-box-icon{width:14px;height:14px;color:var(--text3);display:flex;flex-shrink:0}
+    .search-box-icon svg{width:14px;height:14px}
+    .search-box input{flex:1;min-width:0;background:transparent;border:none;outline:none;color:var(--text);font-size:12px;font-family:inherit}
+    .search-box input::placeholder{color:var(--text3)}
+    .search-box-clear{display:flex;align-items:center;justify-content:center;width:16px;height:16px;flex-shrink:0;background:none;border:none;color:var(--text3);cursor:pointer;padding:0}
+    .search-box-clear svg{width:12px;height:12px}
+    .search-box-clear:hover{color:var(--text)}
     .btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;border:none;transition:all .15s;font-family:inherit}
     .btn-primary{background:var(--accent);color:#fff}
     .btn-primary:hover{background:var(--accent2)}
@@ -629,6 +638,7 @@ const Ic = {
   bookmark: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>,
   bmark:    <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>,
   chart:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+  search:   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
 };
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
@@ -759,6 +769,13 @@ function App() {
     if (user?.uid) await db.collection('userSettings').doc(user.uid).set({gcalCalendars:cals},{merge:true});
   };
   const [showModal,setShowModal]         = useState(false);
+  const [searchQuery,setSearchQuery]     = useState('');
+  const searchWords = searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const matchesSearch = t => {
+    if (!searchWords.length) return true;
+    const title = (t.title||'').toLowerCase();
+    return searchWords.every(w=>title.includes(w));
+  };
   const [pushOn,setPushOn]               = useState(false);
   useEffect(()=>{ let alive=true; isPushActive().then(on=>{ if(alive) setPushOn(on); }); return ()=>{alive=false;}; }, [user]);
   const [voiceListening,setVoiceListening] = useState(false);
@@ -1292,6 +1309,7 @@ function App() {
     }
     else if (selectedList!=='all'&&selectedList!=='seguiment'){if(t.listId!==selectedList)return false;}
     if (!matchesGroup(t)) return false;
+    if (!matchesSearch(t)) return false;
     if (filterStatus!=='all'&&t.status!==filterStatus) return false;
     if (filterPriority!=='all'&&t.priority!==filterPriority) return false;
     if (filterTag!=='all'&&!(t.tags||[]).includes(filterTag)) return false;
@@ -1548,6 +1566,14 @@ function App() {
                   <span style={{width:13,height:13}}>{Ic.gantt}</span> Gantt
                 </button>
               </div>
+              <div className="search-box">
+                <span className="search-box-icon">{Ic.search}</span>
+                <input type="text" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}
+                  placeholder="Cerca per títol..." />
+                {searchQuery&&(
+                  <button className="search-box-clear" title="Esborra la cerca" onClick={()=>setSearchQuery('')}>{Ic.x}</button>
+                )}
+              </div>
               <button className={`btn btn-ghost btn-icon ${voiceListening?'voice-active':''}`}
                 onClick={startVoice} title="Nova tasca per veu"
                 style={{color:voiceListening?'var(--danger)':'var(--text2)',fontSize:18,padding:'6px 10px'}}>
@@ -1655,7 +1681,7 @@ function App() {
               <GanttView tasks={tasks} lists={lists}
                 defaultList={isSpecificList?selectedList:'all'}
                 assignedFilter={isAssignedToView?{type:'to',uid:assignedToUid}:isAssignedByView?{type:'by',uid:assignedByUid}:null}
-                currentUserUid={user.uid}
+                currentUserUid={user.uid} matchesSearch={matchesSearch}
                 selectedTask={selectedTask} onSelectTask={setSelectedTask} onUpdateDates={updateTaskDates}/>
             ) : view==='calendar' ? (
               <CalendarView tasks={filtered} lists={lists} selectedTask={selectedTask} onSelectTask={setSelectedTask} onMoveTask={moveTaskToDate}
@@ -3438,7 +3464,7 @@ function Heatmap({days, logs, color, period}) {
 }
 
 // ─── GANTT VIEW ───────────────────────────────────────────────────────────────
-function GanttView({tasks,lists,defaultList,assignedFilter,currentUserUid,selectedTask,onSelectTask,onUpdateDates}) {
+function GanttView({tasks,lists,defaultList,assignedFilter,currentUserUid,matchesSearch,selectedTask,onSelectTask,onUpdateDates}) {
   const DAY_W=24, DAYS=60, ROW_H=38, LABEL_W=210;
   const [ganttList,setGanttList]=useState(defaultList||'all');
   const [offset,setOffset]=useState(0);
@@ -3511,6 +3537,7 @@ function GanttView({tasks,lists,defaultList,assignedFilter,currentUserUid,select
       if (assignedFilter.type==='to' && !(t.ownerId===currentUserUid && t.assigneeId===assignedFilter.uid)) return false;
       if (assignedFilter.type==='by' && !(t.assigneeId===currentUserUid && t.ownerId===assignedFilter.uid)) return false;
     } else if (ganttList!=='all'&&t.listId!==ganttList) return false;
+    if (matchesSearch&&!matchesSearch(t)) return false;
     const s=t.startDate||t.endDate;const e=t.endDate||t.startDate;
     return s&&e>=winStartStr&&s<=winEndStr;
   }).sort((a,b)=>(a.startDate||a.endDate||'').localeCompare(b.startDate||b.endDate||''));
