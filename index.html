@@ -377,7 +377,8 @@ const RECURRENCE_OPTIONS = [
   {value:'daily',label:'Diàriament'},
   {value:'weekdays',label:'Dies laborals (Dl-Dv)'},
   {value:'weekly',label:'Setmanalment'},
-  {value:'monthly',label:'Mensualment'},
+  {value:'monthly',label:'Mensualment (mateix dia del mes)'},
+  {value:'monthly4w',label:'Mensualment (cada 4 setmanes)'},
   {value:'yearly',label:'Anualment'},
 ];
 // ── Notificacions push (Web Push + VAPID) ──────────────────────────────────
@@ -592,6 +593,7 @@ const nextOccurrence = (dateStr, recurrence) => {
     case 'daily': d.setDate(d.getDate()+1); break;
     case 'weekly': d.setDate(d.getDate()+7); break;
     case 'monthly': d.setMonth(d.getMonth()+1); break;
+    case 'monthly4w': d.setDate(d.getDate()+28); break;
     case 'yearly': d.setFullYear(d.getFullYear()+1); break;
     case 'weekdays':
       do { d.setDate(d.getDate()+1); } while ([0,6].includes(d.getDay()));
@@ -699,26 +701,15 @@ function LoginScreen() {
 function App() {
   const [user,setUser]               = useState(undefined);
   const [tasks,setTasks]             = useState([]);
-  // Per a tasques recurrents: propera ocurrencia de la mateixa serie (per mostrar-la al chip 🔁).
-  // Cal declarar aquest hook abans de qualsevol "return" condicional (regles dels Hooks de React).
-  const seriesOccurrences = useMemo(() => {
-    const map = {};
-    for (const t of tasks) {
-      if (!t.seriesId) continue;
-      const d = t.endDate||t.startDate; if (!d) continue;
-      (map[t.seriesId] ||= []).push({date:d, time:t.startTime||t.endTime||''});
-    }
-    for (const k in map) map[k].sort((a,b)=> a.date!==b.date ? (a.date<b.date?-1:1) : (a.time<b.time?-1:a.time>b.time?1:0));
-    return map;
-  }, [tasks]);
+  // Per a tasques recurrents: propera ocurrencia calculada directament a partir de la regla
+  // de recurrencia (no depen de que ja existeixi un altre document de la mateixa serie).
   const nextOccurrenceFor = task => {
-    if (!task.seriesId) return null;
-    const list = seriesOccurrences[task.seriesId]||[];
-    const ownDate = task.endDate||task.startDate||''; const ownTime = task.startTime||task.endTime||'';
-    for (const o of list) {
-      if (o.date>ownDate || (o.date===ownDate && o.time>ownTime)) return o;
-    }
-    return null;
+    if (!task.recurrence || task.recurrence==='none') return null;
+    const base = task.endDate||task.startDate; if (!base) return null;
+    const nx = nextOccurrence(base, task.recurrence);
+    if (!nx) return null;
+    if (task.recurrenceEndDate && nx > task.recurrenceEndDate) return null;
+    return {date:nx, time:task.startTime||task.endTime||''};
   };
   const [lists,setLists]             = useState([]);
   const [defaultFields,setDefaultFields] = useState([]);
