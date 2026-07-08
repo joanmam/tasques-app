@@ -1115,7 +1115,7 @@ function App() {
       if (mode==='this') {
         await deleteTask(task.id);
       } else {
-        const snap = await db.collection('tasks').where('seriesId','==',task.seriesId).get();
+        const snap = await db.collection('tasks').where('seriesId','==',task.seriesId).where('ownerId','==',user.uid).get();
         if (snap.empty) {
           showToast('⚠ No s\'ha trobat cap tasca de la sèrie per eliminar');
         } else {
