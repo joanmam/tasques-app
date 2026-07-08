@@ -109,7 +109,7 @@ def main():
     # Agrupa les tasques recurrents: per seriesId si en tenen, sino cada una es el seu propi grup.
     groups = {}
     for d in docs:
-        data = d.data()
+        data = d.to_dict()
         rec = data.get("recurrence")
         if not rec or rec == "none":
             continue
