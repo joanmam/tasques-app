@@ -347,7 +347,7 @@
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState, useEffect, useRef } = React;
+const { useState, useEffect, useRef, useMemo } = React;
 
 const uid = () => Math.random().toString(36).slice(2,10);
 // Converteix un color hex (#rrggbb) en rgba amb l'opacitat indicada, per a fons difuminats
@@ -378,6 +378,7 @@ const RECURRENCE_OPTIONS = [
   {value:'weekdays',label:'Dies laborals (Dl-Dv)'},
   {value:'weekly',label:'Setmanalment'},
   {value:'monthly',label:'Mensualment'},
+  {value:'yearly',label:'Anualment'},
 ];
 // ── Notificacions push (Web Push + VAPID) ──────────────────────────────────
 const VAPID_PUBLIC_KEY = 'BIPqnC-UD_KutAs0wlpackJLHEfbsORT0Ra-DUDWbNd9bXTqpO23o6whWeIwbgsP3ySst_NYfHLfxCdpiCaYRLE';
@@ -591,6 +592,7 @@ const nextOccurrence = (dateStr, recurrence) => {
     case 'daily': d.setDate(d.getDate()+1); break;
     case 'weekly': d.setDate(d.getDate()+7); break;
     case 'monthly': d.setMonth(d.getMonth()+1); break;
+    case 'yearly': d.setFullYear(d.getFullYear()+1); break;
     case 'weekdays':
       do { d.setDate(d.getDate()+1); } while ([0,6].includes(d.getDay()));
       break;
@@ -754,6 +756,7 @@ function App() {
   const [editingList,setEditingList]     = useState(null);
   const [showDefaultFields,setShowDefaultFields] = useState(false);
   const [deleteConfirm,setDeleteConfirm]   = useState(null);
+  const [singleDeleteConfirm,setSingleDeleteConfirm] = useState(null);
   const [darkMode,setDarkMode]           = useState(()=>load('tq_dark',false));
   const [view,setView]                   = useState('list');
 
@@ -1075,7 +1078,7 @@ function App() {
   };
   const requestDelete = task => {
     if (task.seriesId) setDeleteConfirm(task);
-    else deleteTask(task.id);
+    else setSingleDeleteConfirm(task);
   };
   const deleteSeries = async (task,mode) => {
     setSyncing(true);
@@ -1312,6 +1315,26 @@ function App() {
   };
   const pendents    = filtered.filter(t=>t.status!=='completada').sort(byStartDate);
   const completades = filtered.filter(t=>t.status==='completada').sort(byStartDate);
+  // Per a tasques recurrents: propera ocurrencia de la mateixa serie (per mostrar-la al chip 🔁).
+  const seriesOccurrences = useMemo(() => {
+    const map = {};
+    for (const t of tasks) {
+      if (!t.seriesId) continue;
+      const d = t.endDate||t.startDate; if (!d) continue;
+      (map[t.seriesId] ||= []).push({date:d, time:t.startTime||t.endTime||''});
+    }
+    for (const k in map) map[k].sort((a,b)=> a.date!==b.date ? (a.date<b.date?-1:1) : (a.time<b.time?-1:a.time>b.time?1:0));
+    return map;
+  }, [tasks]);
+  const nextOccurrenceFor = task => {
+    if (!task.seriesId) return null;
+    const list = seriesOccurrences[task.seriesId]||[];
+    const ownDate = task.endDate||task.startDate||''; const ownTime = task.startTime||task.endTime||'';
+    for (const o of list) {
+      if (o.date>ownDate || (o.date===ownDate && o.time>ownTime)) return o;
+    }
+    return null;
+  };
   const countFor = id => tasks.filter(t=>{
     if (t.status==='completada') return false;
     if (!matchesGroup(t)) return false;
@@ -1670,7 +1693,7 @@ function App() {
                       {grp.label}
                       <span className="dgh-count">{grpTasks.length}</span>
                     </div>
-                    {grpTasks.map(t=><TaskItem key={t.id} task={t} lists={lists}
+                    {grpTasks.map(t=><TaskItem key={t.id} task={t} lists={lists} nextOcc={nextOccurrenceFor(t)}
                       selected={selectedTask?.id===t.id} onClick={()=>setSelectedTask(t)}
                       onToggle={()=>toggleStatus(t.id,t.status)} onDelete={canDeleteTask(t)?()=>requestDelete(t):null}
                       onDelay={(task,type)=>delayTask(task,type)} onTrack={toggleTrack} assignedOnly={!canFullyEdit(t)}/>)}
@@ -1683,9 +1706,9 @@ function App() {
                   Completades
                   <span className="dgh-count">{completades.length}</span>
                 </div>
-                {completades.map(t=><TaskItem key={t.id} task={t} lists={lists}
+                {completades.map(t=><TaskItem key={t.id} task={t} lists={lists} nextOcc={nextOccurrenceFor(t)}
                   selected={selectedTask?.id===t.id} onClick={()=>setSelectedTask(t)}
-                  onToggle={()=>toggleStatus(t.id,t.status)} onDelete={canDeleteTask(t)?()=>deleteTask(t.id):null}
+                  onToggle={()=>toggleStatus(t.id,t.status)} onDelete={canDeleteTask(t)?()=>requestDelete(t):null}
                   onDelay={(task,type)=>delayTask(task,type)} onTrack={toggleTrack} assignedOnly={!canFullyEdit(t)}/>)}
               </>}
             </div>
@@ -1722,6 +1745,9 @@ function App() {
       {showDefaultFields&&<DefaultFieldsModal fields={defaultFields} onSave={saveDefaultFields} onClose={()=>setShowDefaultFields(false)}/>}
       {showGcalSettings&&<GcalSettingsModal calendars={gcalCalendars} onSave={cals=>{saveGcalCalendars(cals);setShowGcalSettings(false);}} onClose={()=>setShowGcalSettings(false)}/>}
       {deleteConfirm&&<DeleteSeriesModal task={deleteConfirm} onConfirm={mode=>deleteSeries(deleteConfirm,mode)} onClose={()=>setDeleteConfirm(null)}/>}
+      {singleDeleteConfirm&&<ConfirmDeleteModal task={singleDeleteConfirm}
+        onConfirm={()=>{deleteTask(singleDeleteConfirm.id);setSingleDeleteConfirm(null);}}
+        onClose={()=>setSingleDeleteConfirm(null)}/>}
       {toast&&(()=>{const warn=/^⚠/.test(toast);const txt=toast.replace(/^[✓⚠]\s*/,'');return <div className="toast"><span style={{color:warn?'var(--warn)':'var(--success)',fontSize:15}}>{warn?'⚠':'✓'}</span>{txt}</div>;})()}
     </>
   );
@@ -1753,7 +1779,7 @@ function SidebarItem({icon,dot,label,count,active,onClick,onSettings,onDelete,sh
 }
 
 // ─── TASK ITEM ────────────────────────────────────────────────────────────────
-function TaskItem({task,lists,selected,onClick,onToggle,onDelete,onDelay,onTrack,readOnly,assignedOnly}) {
+function TaskItem({task,lists,selected,onClick,onToggle,onDelete,onDelay,onTrack,readOnly,assignedOnly,nextOcc}) {
   const [hover,setHover] = useState(false);
   const done  = task.status==='completada';
   const list  = lists.find(l=>l.id===task.listId);
@@ -1788,7 +1814,9 @@ function TaskItem({task,lists,selected,onClick,onToggle,onDelete,onDelay,onTrack
               </span>
             );
           })()}
-          {recLabel&&<span className="recurrence-chip">🔁 {recLabel}</span>}
+          {recLabel&&<span className="recurrence-chip" title={nextOcc?`Propera ocurrència: ${fmt(nextOcc.date)}${nextOcc.time?' '+nextOcc.time:''}`:undefined}>
+            🔁 {recLabel}{nextOcc&&` · ${fmt(nextOcc.date)}${nextOcc.time?' '+nextOcc.time:''}`}
+          </span>}
           {task.reminderMinutes>0&&<span className="task-meta-item" title="Recordatori actiu">{Ic.bell}</span>}
           {list&&<span className="task-meta-item" style={{color:list.color}}>{Ic.folder} {list.name}</span>}
           {assignedOnly&&<span className="task-meta-item" title="Tasca assignada a mi" style={{color:'var(--accent)'}}>{Ic.person} Assignada a mi</span>}
@@ -2780,6 +2808,22 @@ function DeleteSeriesModal({task,onConfirm,onClose}) {
         </div>
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancel·lar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── CONFIRM DELETE MODAL (tasca solta, sense sèrie) ─────────────────────────
+function ConfirmDeleteModal({task,onConfirm,onClose}) {
+  return (
+    <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className="modal modal-sm">
+        <h2>Eliminar tasca</h2>
+        <p style={{fontSize:13,color:'var(--text2)'}}>Segur que vols eliminar "{task.title}"? Aquesta acció no es pot desfer.</p>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel·lar</button>
+          <button className="btn btn-danger-soft" onClick={onConfirm}>Eliminar</button>
         </div>
       </div>
     </div>
