@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 *.local
+__pycache__/
 
 # Secrets (mai pujar aquests fitxers)
 service-account.json

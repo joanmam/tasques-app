@@ -1,0 +1,37 @@
+name: Backfill ocurrències recurrents (un cop)
+
+# Nomes es pot executar manualment des de la pestanya Actions de GitHub.
+# Genera les ocurrencies futures que falten a tasques recurrents antigues
+# (creades abans que l'app generes tota la serie d'un cop). Es idempotent:
+# si ja no falta res, no crea res.
+#
+# Per defecte fa una simulacio (dry_run=true) que nomes escriu al log,
+# sense tocar Firestore. Torna a executar-lo amb dry_run=false per aplicar
+# els canvis de veritat.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Simulacio (no escriu res a Firestore)"
+        type: boolean
+        default: true
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instal·lar dependencies
+        run: pip install -r scripts/requirements.txt
+      - name: Generar ocurrències que falten
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            python scripts/backfill_recurring_occurrences.py --dry-run
+          else
+            python scripts/backfill_recurring_occurrences.py
+          fi
