@@ -699,6 +699,27 @@ function LoginScreen() {
 function App() {
   const [user,setUser]               = useState(undefined);
   const [tasks,setTasks]             = useState([]);
+  // Per a tasques recurrents: propera ocurrencia de la mateixa serie (per mostrar-la al chip 🔁).
+  // Cal declarar aquest hook abans de qualsevol "return" condicional (regles dels Hooks de React).
+  const seriesOccurrences = useMemo(() => {
+    const map = {};
+    for (const t of tasks) {
+      if (!t.seriesId) continue;
+      const d = t.endDate||t.startDate; if (!d) continue;
+      (map[t.seriesId] ||= []).push({date:d, time:t.startTime||t.endTime||''});
+    }
+    for (const k in map) map[k].sort((a,b)=> a.date!==b.date ? (a.date<b.date?-1:1) : (a.time<b.time?-1:a.time>b.time?1:0));
+    return map;
+  }, [tasks]);
+  const nextOccurrenceFor = task => {
+    if (!task.seriesId) return null;
+    const list = seriesOccurrences[task.seriesId]||[];
+    const ownDate = task.endDate||task.startDate||''; const ownTime = task.startTime||task.endTime||'';
+    for (const o of list) {
+      if (o.date>ownDate || (o.date===ownDate && o.time>ownTime)) return o;
+    }
+    return null;
+  };
   const [lists,setLists]             = useState([]);
   const [defaultFields,setDefaultFields] = useState([]);
   const [completionLogs,setCompletionLogs] = useState([]);
@@ -1315,26 +1336,6 @@ function App() {
   };
   const pendents    = filtered.filter(t=>t.status!=='completada').sort(byStartDate);
   const completades = filtered.filter(t=>t.status==='completada').sort(byStartDate);
-  // Per a tasques recurrents: propera ocurrencia de la mateixa serie (per mostrar-la al chip 🔁).
-  const seriesOccurrences = useMemo(() => {
-    const map = {};
-    for (const t of tasks) {
-      if (!t.seriesId) continue;
-      const d = t.endDate||t.startDate; if (!d) continue;
-      (map[t.seriesId] ||= []).push({date:d, time:t.startTime||t.endTime||''});
-    }
-    for (const k in map) map[k].sort((a,b)=> a.date!==b.date ? (a.date<b.date?-1:1) : (a.time<b.time?-1:a.time>b.time?1:0));
-    return map;
-  }, [tasks]);
-  const nextOccurrenceFor = task => {
-    if (!task.seriesId) return null;
-    const list = seriesOccurrences[task.seriesId]||[];
-    const ownDate = task.endDate||task.startDate||''; const ownTime = task.startTime||task.endTime||'';
-    for (const o of list) {
-      if (o.date>ownDate || (o.date===ownDate && o.time>ownTime)) return o;
-    }
-    return null;
-  };
   const countFor = id => tasks.filter(t=>{
     if (t.status==='completada') return false;
     if (!matchesGroup(t)) return false;
