@@ -1111,21 +1111,37 @@ function App() {
   };
   const deleteSeries = async (task,mode) => {
     setSyncing(true);
-    if (mode==='this') {
-      await deleteTask(task.id);
-    } else {
-      const snap = await db.collection('tasks').where('seriesId','==',task.seriesId).get();
-      const batch = db.batch();
-      snap.docs.forEach(d=>{
-        const data=d.data();
-        if (mode==='all' || (mode==='future' && (data.endDate||'')>=(task.endDate||''))) {
-          batch.delete(d.ref);
+    try {
+      if (mode==='this') {
+        await deleteTask(task.id);
+      } else {
+        const snap = await db.collection('tasks').where('seriesId','==',task.seriesId).get();
+        if (snap.empty) {
+          showToast('⚠ No s\'ha trobat cap tasca de la sèrie per eliminar');
+        } else {
+          const batch = db.batch();
+          let n = 0;
+          snap.docs.forEach(d=>{
+            const data=d.data();
+            if (mode==='all' || (mode==='future' && (data.endDate||'')>=(task.endDate||''))) {
+              batch.delete(d.ref); n++;
+            }
+          });
+          if (n===0) {
+            showToast('⚠ No hi havia cap ocurrència que complís el criteri');
+          } else {
+            await batch.commit();
+            showToast(`✓ ${n} ocurrència${n>1?'s':''} eliminada${n>1?'s':''}`);
+          }
         }
-      });
-      await batch.commit();
-      if (selectedTask?.seriesId===task.seriesId) setSelectedTask(null);
+        if (selectedTask?.seriesId===task.seriesId) setSelectedTask(null);
+      }
+    } catch (e) {
+      console.error('Error eliminant la sèrie:', e);
+      showToast(`⚠ No s'ha pogut eliminar: ${e.message||e}`);
+    } finally {
+      setSyncing(false); setDeleteConfirm(null);
     }
-    setSyncing(false); setDeleteConfirm(null);
   };
   const toggleStatus = async (id,current) => {
     const task = tasks.find(t=>t.id===id); if (!task) return;
