@@ -1353,8 +1353,11 @@ function App() {
     return true;
   });
   // Ordena per dia d'inici ascendent (i per hora d'inici com a desempat).
+  // Ordena per la data de "proper venciment" real de cada tasca: taskDueStr ja
+  // sap que en una tasca recurrent cal mirar endDate (startDate es identic a
+  // totes les ocurrencies de la serie i no serveix per ordenar-les entre elles).
   const byStartDate = (a,b) => {
-    const da=a.startDate||a.endDate||''; const db=b.startDate||b.endDate||'';
+    const da=taskDueStr(a); const db=taskDueStr(b);
     if (da!==db) return da<db?-1:1;
     const ta=a.startTime||a.endTime||''; const tb=b.startTime||b.endTime||'';
     return ta<tb?-1:ta>tb?1:0;
