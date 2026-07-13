@@ -591,6 +591,9 @@ const dateCategoryForDay = d => {
 const taskDateCategories = t => {
   if (isOverdue(t)) return ['overdue'];
   if (!t.startDate && !t.endDate) return ['nodate'];
+  // Una ocurrència de sèrie repetida no és una tasca "de diversos dies": la seva startDate és la
+  // data d'inici original de la sèrie (igual a totes les ocurrències), no l'inici d'aquesta ocurrència.
+  if (t.seriesId) return [dateCategoryForDay(t.endDate||t.startDate)];
   const start = t.startDate || t.endDate, end = t.endDate || t.startDate;
   if (start === end) return [dateCategoryForDay(end)];
   const from = start < today ? today : start;
@@ -628,7 +631,8 @@ const buildDayGroups = (list, maxDateStr) => {
     const start = t.startDate || t.endDate;
     const end = t.endDate || t.startDate;
     if (!start && !end) { push('', t); return; }
-    if (start === end || !start || !end) { push(due||end||start, t); return; }
+    // Ocurrència de sèrie repetida: la startDate és la de la sèrie sencera, no d'aquesta ocurrència.
+    if (t.seriesId || start === end || !start || !end) { push(due||end||start, t); return; }
     let from = start < today ? today : start;
     let to = end > maxDateStr ? maxDateStr : end;
     if (from > to) { push(due||end, t); return; }
@@ -1891,7 +1895,8 @@ function TaskItem({task,lists,selected,onClick,onToggle,onDelete,onDelay,onTrack
           {task.endDate&&(()=>{
             const cat = dateCategory(task);
             const cfg = DATE_GROUPS.find(g=>g.key===cat);
-            const isRange = task.startDate && task.endDate && task.startDate!==task.endDate;
+            // Una ocurrència de sèrie repetida no compta com a rang: la seva startDate és la de la sèrie sencera.
+            const isRange = !task.seriesId && task.startDate && task.endDate && task.startDate!==task.endDate;
             return (
               <span className={`date-badge ${cfg?.cls||'date-later'}`}>
                 {Ic.calendar}
