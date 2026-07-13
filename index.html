@@ -457,6 +457,8 @@ const REMINDER_OPTIONS = [
 ];
 const tagColor = t => TAG_COLORS[Math.abs([...t].reduce((a,c)=>a+c.charCodeAt(0),0))%TAG_COLORS.length];
 const fmt = d => d ? new Date(d+'T12:00').toLocaleDateString('ca-ES',{day:'2-digit',month:'short'}) : '';
+// Format per a la vista Llista: "dl, 13 de juliol" (dia de la setmana abreujat sense punt, dia i mes complet)
+const fmtList = d => d ? new Date(d+'T12:00').toLocaleDateString('ca-ES',{weekday:'short',day:'numeric',month:'long'}).replace('.','') : '';
 // YYYY-MM-DD en hora local (evita el desfasament de toISOString amb fusos horaris)
 const ymd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const today = ymd(new Date());
@@ -1841,7 +1843,7 @@ function TaskItem({task,lists,selected,onClick,onToggle,onDelete,onDelay,onTrack
               <span className={`date-badge ${cfg?.cls||'date-later'}`}>
                 {Ic.calendar}
                 {isOverdue(task)?'⚠ ':''}
-                {fmt(task.endDate)}
+                {fmtList(task.endDate)}
                 {(task.startTime||task.endTime)&&(
                   <>
                     {' '}{Ic.clock}{task.startTime||'/'}
@@ -1851,8 +1853,8 @@ function TaskItem({task,lists,selected,onClick,onToggle,onDelete,onDelay,onTrack
               </span>
             );
           })()}
-          {recLabel&&<span className="recurrence-chip" title={nextOcc?`Propera ocurrència: ${fmt(nextOcc.date)}${nextOcc.time?' '+nextOcc.time:''}`:undefined}>
-            🔁 {recLabel}{nextOcc&&` · ${fmt(nextOcc.date)}${nextOcc.time?' '+nextOcc.time:''}`}
+          {recLabel&&<span className="recurrence-chip" title={nextOcc?`Propera ocurrència: ${fmtList(nextOcc.date)}${nextOcc.time?' '+nextOcc.time:''}`:undefined}>
+            🔁 {recLabel}{nextOcc&&` · ${fmtList(nextOcc.date)}${nextOcc.time?' '+nextOcc.time:''}`}
           </span>}
           {task.reminderMinutes>0&&<span className="task-meta-item" title="Recordatori actiu">{Ic.bell}</span>}
           {list&&<span className="task-meta-item" style={{color:list.color}}>{Ic.folder} {list.name}</span>}
