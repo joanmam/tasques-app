@@ -2927,6 +2927,22 @@ function ConfirmDeleteModal({task,onConfirm,onClose}) {
   );
 }
 
+// ─── CONFIRM MOVE MODAL (arrossegar una tasca a un altre dia al calendari) ───
+function ConfirmMoveModal({task,newDateStr,onConfirm,onClose}) {
+  return (
+    <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className="modal modal-sm">
+        <h2>Moure tasca</h2>
+        <p style={{fontSize:13,color:'var(--text2)'}}>Vols moure "{task.title}" a {fmtList(newDateStr)}?</p>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel·lar</button>
+          <button className="btn btn-primary" onClick={onConfirm}>Moure</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── NEW TASK MODAL ───────────────────────────────────────────────────────────
 function NewTaskModal({lists,defaultFields,defaultList,onSave,onClose,preFill}) {
   const [form,setForm] = useState(()=>{
@@ -3144,6 +3160,9 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask,onMoveTask,gcalToke
   const dragRef = useRef(null);          // {task, startX, startY, active, ghost}
   const suppressClickRef = useRef(false); // evita obrir el detall just després d'arrossegar
   const [dragOverDate,setDragOverDate] = useState(null);
+  // Demana confirmació abans de moure realment la tasca (evita canvis de dia accidentals,
+  // especialment al mòbil/Android, on un lleuger arrossegament es pot confondre amb un toc).
+  const [pendingMove,setPendingMove] = useState(null); // {task, newDateStr}
   const startChipDrag = (e, task) => {
     if (typeof e.button === 'number' && e.button !== 0) return; // només botó esquerre
     dragRef.current = {task, startX:e.clientX, startY:e.clientY, active:false, ghost:null};
@@ -3181,7 +3200,8 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask,onMoveTask,gcalToke
             const el = document.elementFromPoint(ev.clientX, ev.clientY);
             const cell = el && el.closest('[data-datestr]');
             const ds = cell && cell.getAttribute('data-datestr');
-            if (ds && onMoveTask) onMoveTask(d.task, ds);
+            const anchor = d.task.endDate || d.task.startDate;
+            if (ds && ds!==anchor && onMoveTask) setPendingMove({task:d.task, newDateStr:ds});
           }
         }
       }
@@ -3338,6 +3358,9 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask,onMoveTask,gcalToke
           </span>
         ))}
       </div>
+      {pendingMove&&<ConfirmMoveModal task={pendingMove.task} newDateStr={pendingMove.newDateStr}
+        onConfirm={()=>{onMoveTask(pendingMove.task,pendingMove.newDateStr);setPendingMove(null);}}
+        onClose={()=>setPendingMove(null)}/>}
     </div>
   );
 }
