@@ -576,6 +576,29 @@ const dateCategory = t => {
   if (t.endDate <= weekLaterStr) return 'soon';
   return 'later';
 };
+// Igual que dateCategory pero per a un dia concret (string YYYY-MM-DD), no per a una tasca sencera.
+const dateCategoryForDay = d => {
+  if (!d) return 'nodate';
+  if (d < today) return 'overdue';
+  if (d === today) return 'today';
+  if (d === tomorrowStr) return 'tomorrow';
+  if (d <= weekLaterStr) return 'soon';
+  return 'later';
+};
+// Totes les categories (Avui/Demà/Pròxims 7 dies/Més endavant) que travessa una tasca de diversos dies,
+// perquè aparegui repetida a cada bloc pel qual passi. Les tasques ja vençudes (per isOverdue) només
+// surten al bloc "Vençudes", igual que abans. Els dies ja passats d'una tasca en curs no compten.
+const taskDateCategories = t => {
+  if (isOverdue(t)) return ['overdue'];
+  if (!t.startDate && !t.endDate) return ['nodate'];
+  const start = t.startDate || t.endDate, end = t.endDate || t.startDate;
+  if (start === end) return [dateCategoryForDay(end)];
+  const from = start < today ? today : start;
+  const cats = new Set();
+  let cur = new Date(from+'T12:00'); const endD = new Date(end+'T12:00'); let safety = 0;
+  while (cur <= endD && safety < 400) { cats.add(dateCategoryForDay(ymd(cur))); cur.setDate(cur.getDate()+1); safety++; }
+  return cats.size ? [...cats] : [dateCategoryForDay(end)];
+};
 const DATE_GROUPS = [
   { key:'overdue',  label:'Vençudes',       dot:'var(--danger)',  cls:'date-overdue'  },
   { key:'today',    label:'Avui',           dot:'var(--warn)',    cls:'date-today'    },
@@ -595,6 +618,25 @@ const dayGroupLabel = dateStr => {
   return label.charAt(0).toUpperCase()+label.slice(1);
 };
 const dayGroupDot = dateStr => dateStr===today?'var(--warn)':dateStr===tomorrowStr?'var(--accent)':!dateStr?'var(--border)':'var(--text2)';
+// Agrupa una llista de tasques per dia concret dins la finestra [avui, maxDateStr], repetint les tasques
+// de diversos dies a cada dia intermedi que travessin (l'ordre dins de cada dia respecta l'ordre d'entrada).
+const buildDayGroups = (list, maxDateStr) => {
+  const map = new Map();
+  const push = (d,t) => { const arr = map.get(d)||[]; arr.push(t); map.set(d,arr); };
+  list.forEach(t=>{
+    const due = taskDueStr(t);
+    const start = t.startDate || t.endDate;
+    const end = t.endDate || t.startDate;
+    if (!start && !end) { push('', t); return; }
+    if (start === end || !start || !end) { push(due||end||start, t); return; }
+    let from = start < today ? today : start;
+    let to = end > maxDateStr ? maxDateStr : end;
+    if (from > to) { push(due||end, t); return; }
+    let cur = new Date(from+'T12:00'); const endD = new Date(to+'T12:00'); let safety = 0;
+    while (cur <= endD && safety < 400) { push(ymd(cur), t); cur.setDate(cur.getDate()+1); safety++; }
+  });
+  return [...map.keys()].sort().map(d=>({key:d||'nodate',label:dayGroupLabel(d),dot:dayGroupDot(d),tasks:map.get(d)}));
+};
 const save = (k,v) => { try{localStorage.setItem(k,JSON.stringify(v))}catch{} };
 const load = (k,d) => { try{return JSON.parse(localStorage.getItem(k))??d}catch{return d} };
 
@@ -1309,6 +1351,15 @@ function App() {
   const orderedGroups = [...LIST_GROUPS.filter(g=>presentGroups.includes(g)), ...presentGroups.filter(g=>!LIST_GROUPS.includes(g))];
   // El filtre de grup només s'aplica a vistes generals (Totes, Avui, Demà...), no quan ja s'ha triat una llista concreta
   const matchesGroup = t => isSpecificList || selectedGroup==='all' || listGroupOf(t.listId)===selectedGroup;
+  // Per a les vistes "Pròxims 3/7 dies": la tasca hi entra si algun dia del seu rang [inici,fi] cau dins
+  // la finestra [avui, maxStr], no només si el seu dia de venciment hi cau (així una tasca de diversos dies
+  // que comença dins la finestra però acaba més tard també hi apareix, als dies intermedis que li toquin).
+  const inDateWindow = (t, maxStr) => {
+    if (t.seriesId) { const d=t.endDate; return !!d && d>=today && d<=maxStr; }
+    const s = t.startDate||t.endDate, e = t.endDate||t.startDate;
+    if (!s && !e) return false;
+    return s<=maxStr && e>=today;
+  };
   const filtered = tasks.filter(t=>{
     if (selectedList==='today'){
       // Per a ocurrències de tasques repetides, només compta la data de l'ocurrència (endDate),
@@ -1317,8 +1368,8 @@ function App() {
       else if (t.startDate!==today&&t.endDate!==today) return false;
     }
     else if (selectedList==='tomorrow'){ if (taskDueStr(t)!==tomorrowStr) return false; }
-    else if (selectedList==='next3'){ const d=taskDueStr(t); if(!d||d<today||d>threeDayLaterStr) return false; }
-    else if (selectedList==='next7'){ const d=taskDueStr(t); if(!d||d<today||d>weekLaterStr) return false; }
+    else if (selectedList==='next3'){ if(!inDateWindow(t,threeDayLaterStr)) return false; }
+    else if (selectedList==='next7'){ if(!inDateWindow(t,weekLaterStr)) return false; }
     else if (typeof selectedList==='string'&&selectedList.startsWith('assignedTo:')){
       const uid=selectedList.slice(11); if(t.ownerId!==user.uid||t.assigneeId!==uid) return false;
     }
@@ -1355,11 +1406,11 @@ function App() {
     return true;
   });
   // Ordena per dia d'inici ascendent (i per hora d'inici com a desempat).
-  // Ordena per la data de "proper venciment" real de cada tasca: taskDueStr ja
-  // sap que en una tasca recurrent cal mirar endDate (startDate es identic a
+  // Excepció: en una tasca recurrent cal mirar endDate (startDate es identic a
   // totes les ocurrencies de la serie i no serveix per ordenar-les entre elles).
+  const sortDateStr = t => t.seriesId ? (t.endDate||t.startDate||'') : (t.startDate||t.endDate||'');
   const byStartDate = (a,b) => {
-    const da=taskDueStr(a); const db=taskDueStr(b);
+    const da=sortDateStr(a); const db=sortDateStr(b);
     if (da!==db) return da<db?-1:1;
     const ta=a.startTime||a.endTime||''; const tb=b.startTime||b.endTime||'';
     return ta<tb?-1:ta>tb?1:0;
@@ -1371,8 +1422,8 @@ function App() {
     if (!matchesGroup(t)) return false;
     if (id==='today') return t.seriesId?t.endDate===today:(t.startDate===today||t.endDate===today);
     if (id==='tomorrow') return taskDueStr(t)===tomorrowStr;
-    if (id==='next3') { const d=taskDueStr(t); return d&&d>=today&&d<=threeDayLaterStr; }
-    if (id==='next7') { const d=taskDueStr(t); return d&&d>=today&&d<=weekLaterStr; }
+    if (id==='next3') return inDateWindow(t,threeDayLaterStr);
+    if (id==='next7') return inDateWindow(t,weekLaterStr);
     return t.listId===id;
   }).length;
   // Resolt l'email d'un uid: primer l'ownerEmail guardat a la tasca (tasques noves),
@@ -1715,13 +1766,14 @@ function App() {
                 <div className="empty-state">{Ic.list}<p>Cap tasca. Crea-ne una amb <span className="kbd">n</span></p></div>
               )}
               {(selectedList==='next3'||selectedList==='next7'?
-                // Agrupa per dia concret (Avui / Demà / nom del dia), evitant l'etiqueta confusa "Pròxims 7 dies"
-                [...new Set(pendents.map(t=>taskDueStr(t)))].sort()
-                  .map(d=>({key:d||'nodate',label:dayGroupLabel(d),dot:dayGroupDot(d),
-                    tasks:pendents.filter(t=>taskDueStr(t)===d)}))
+                // Agrupa per dia concret (Avui / Demà / nom del dia), evitant l'etiqueta confusa "Pròxims 7 dies".
+                // Les tasques de diversos dies apareixen repetides a cada dia intermedi que travessin dins la finestra.
+                buildDayGroups(pendents, selectedList==='next3'?threeDayLaterStr:weekLaterStr)
                 :
+                // Les tasques de diversos dies apareixen repetides a cada bloc (Avui/Demà/Pròxims 7 dies/Més endavant)
+                // pel qual passi algun dels seus dies intermedis.
                 DATE_GROUPS.map(grp=>({key:grp.key,label:grp.label,dot:grp.dot,
-                  tasks:pendents.filter(t=>dateCategory(t)===grp.key)}))
+                  tasks:pendents.filter(t=>taskDateCategories(t).includes(grp.key))}))
               ).map(grp=>{
                 const grpTasks = grp.tasks;
                 if (!grpTasks.length) return null;
@@ -1839,11 +1891,12 @@ function TaskItem({task,lists,selected,onClick,onToggle,onDelete,onDelay,onTrack
           {task.endDate&&(()=>{
             const cat = dateCategory(task);
             const cfg = DATE_GROUPS.find(g=>g.key===cat);
+            const isRange = task.startDate && task.endDate && task.startDate!==task.endDate;
             return (
               <span className={`date-badge ${cfg?.cls||'date-later'}`}>
                 {Ic.calendar}
                 {isOverdue(task)?'⚠ ':''}
-                {fmtList(task.endDate)}
+                {isRange ? <>{fmtList(task.startDate)} → {fmtList(task.endDate)}</> : fmtList(task.endDate)}
                 {(task.startTime||task.endTime)&&(
                   <>
                     {' '}{Ic.clock}{task.startTime||'/'}
