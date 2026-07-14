@@ -2946,16 +2946,23 @@ function ConfirmMoveModal({task,newDateStr,onConfirm,onClose}) {
 // ─── NEW TASK MODAL ───────────────────────────────────────────────────────────
 function NewTaskModal({lists,defaultFields,defaultList,onSave,onClose,preFill}) {
   const [form,setForm] = useState(()=>{
-    // Durada per defecte: mateix dia de creació (inici=fi) i d'una hora,
-    // començant a la propera hora en punt. L'usuari ho pot editar després.
+    // Durada per defecte d'una hora. Sense cap pista (creació manual): comença a la propera hora en
+    // punt. Si el preFill (p. ex. la veu, que només dona "a les 15:00") només coneix un dels dos
+    // extrems, es dedueix l'altre sumant/restant 1h, en lloc d'agafar l'hora actual del rellotge.
     const now = new Date();
     const startHour = now.getMinutes()===0 ? now.getHours() : now.getHours()+1;
-    const pad = n => String(n%24).padStart(2,'0');
+    const pad = n => String(((n%24)+24)%24).padStart(2,'0');
+    const addHour = (hhmm,delta) => { const [h,m]=hhmm.split(':').map(Number); return `${pad(h+delta)}:${String(m).padStart(2,'0')}`; };
     const defaultStartTime = `${pad(startHour)}:00`;
-    const defaultEndTime = `${pad(startHour+1)}:00`;
+    const defaultEndTime = addHour(defaultStartTime,1);
+    let startTime, endTime;
+    if (preFill?.startTime && preFill?.endTime) { startTime=preFill.startTime; endTime=preFill.endTime; }
+    else if (preFill?.startTime) { startTime=preFill.startTime; endTime=addHour(preFill.startTime,1); }
+    else if (preFill?.endTime) { endTime=preFill.endTime; startTime=addHour(preFill.endTime,-1); }
+    else { startTime=defaultStartTime; endTime=defaultEndTime; }
     return {
       title:preFill?.title||'',description:'',startDate:preFill?.endDate||today,
-      endDate:preFill?.endDate||today,startTime:preFill?.startTime||defaultStartTime,endTime:preFill?.endTime||defaultEndTime,
+      endDate:preFill?.endDate||today,startTime,endTime,
       priority:'mitjana',status:'pendent',tags:[],
       listId:preFill?.listId||defaultList||lists[0]?.id||'',subtasks:[],customValues:{},
       reminderMinutes:0,recurrence:'none',recurrenceEndDate:''
