@@ -13,8 +13,11 @@ Idempotent: l'ID de cada document de Firestore es l'ID de la pagina de Notion,
 i cada execucio sobreescriu el document sencer (aixi els canvis fets a Notion
 -telefon nou, categoria canviada...- es reflecteixen). Els contactes que ja no
 tenen "Personal" marcat (o que s'han esborrat de Notion) s'eliminen de
-Firestore, sempre que el document tingui source == "notion" (mai toquem
-contactes creats per una altra via).
+Firestore, sempre que el document tingui source == "notion" i sigui del mateix
+propietari (mai toquem contactes d'altres propietaris o creats per una altra via).
+
+Els contactes son PRIVATS per usuari (camp ownerId): nomes el propietari (OWNER_EMAIL)
+els pot llegir des de l'app (veure regles de Firestore v8, contacts/{contactId}).
 
 Secrets (variables d'entorn, via GitHub Secrets):
     NOTION_API_KEY            -> secret de la integracio interna de Notion
@@ -24,9 +27,10 @@ Secrets (variables d'entorn, via GitHub Secrets):
 import os, sys, re, time
 import requests
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, firestore, auth
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+OWNER_EMAIL = "joanmam@gmail.com"
 DRY_RUN = "--dry-run" in sys.argv
 
 # ID de la data source "Contactes" (obtingut via el connector MCP de Notion el
@@ -105,7 +109,7 @@ def notion_id_from_page(page):
     return page["id"].replace("-", "")
 
 
-def build_doc(page):
+def build_doc(page, owner_uid):
     props = page.get("properties", {})
     first = plain_title(props.get("First Name", {}))
     last = plain_rich_text(props.get("Last Name", {}))
@@ -126,6 +130,7 @@ def build_doc(page):
         "email1": email1,
         "notionUrl": page.get("url", ""),
         "source": "notion",
+        "ownerId": owner_uid,
         "syncedAt": firestore.SERVER_TIMESTAMP,
     }
 
@@ -134,16 +139,19 @@ def main():
     pages = fetch_personal_contacts()
     print(f"Contactes 'Personal' trobats a Notion: {len(pages)}")
 
-    prepared = [(notion_id_from_page(p), build_doc(p)) for p in pages]
-    current_ids = {nid for nid, _ in prepared}
-
     if DRY_RUN:
+        prepared = [(notion_id_from_page(p), build_doc(p, "(uid-real-en-execucio)")) for p in pages]
         for nid, doc in prepared[:10]:
             print(f"[DRY] {nid} -> {doc['name']} | {doc['phone1'] or doc['phone2'] or '(sense telefon)'}")
         print(f"[DRY] Es sincronitzarien {len(prepared)} contactes. Cap canvi fet.")
         return
 
     db = init_db()
+    owner_uid = auth.get_user_by_email(OWNER_EMAIL).uid
+    print(f"Propietari: {OWNER_EMAIL} -> uid={owner_uid}")
+
+    prepared = [(notion_id_from_page(p), build_doc(p, owner_uid)) for p in pages]
+    current_ids = {nid for nid, _ in prepared}
 
     # --- Upsert dels contactes actuals ---
     batch = db.batch()
@@ -158,9 +166,10 @@ def main():
     batch.commit()
     print(f"Actualitzats {count} contactes a Firestore.")
 
-    # --- Neteja: esborra contactes de Notion que ja no son "Personal" (o que ---
-    # --- s'han esborrat a Notion), sense tocar mai res que no vingui de Notion.
-    existing = db.collection("contacts").where("source", "==", "notion").stream()
+    # --- Neteja: esborra contactes de Notion (d'aquest propietari) que ja no ---
+    # --- son "Personal" (o que s'han esborrat a Notion). Mai toquem contactes
+    # --- d'altres propietaris ni de fonts diferents de Notion.
+    existing = db.collection("contacts").where("source", "==", "notion").where("ownerId", "==", owner_uid).stream()
     to_delete = [doc.id for doc in existing if doc.id not in current_ids]
     if to_delete:
         del_batch = db.batch()

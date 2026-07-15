@@ -16,14 +16,18 @@ al Claude d'un xat Cowork, que:
 L'ID de cada document és l'ID de la pagina de Notion (extret de la URL), aixi
 la re-sincronitzacio es idempotent (actualitza en lloc de duplicar).
 
+Els contactes son PRIVATS per usuari (camp ownerId): nomes el propietari (OWNER_EMAIL)
+els pot llegir des de l'app (veure regles de Firestore v8, contacts/{contactId}).
+
 Secrets (variables d'entorn, via GitHub Secrets, o servei local per proves):
     FIREBASE_SERVICE_ACCOUNT  -> contingut JSON del compte de servei de Firebase
 """
 import os, sys, json, re
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, firestore, auth
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+OWNER_EMAIL = "joanmam@gmail.com"
 DRY_RUN = "--dry-run" in sys.argv
 # Fitxer d'entrada: per defecte scripts/data/contacts_notion_raw.json, pero es pot
 # passar una altra ruta com a primer argument (útil per no haver de commitejar
@@ -61,7 +65,7 @@ def clean_phone(raw):
     return re.sub(r"\s+", " ", first).strip()
 
 
-def build_doc(row):
+def build_doc(row, owner_uid):
     first = (row.get("First Name") or "").strip()
     last = (row.get("Last Name") or "").strip()
     org = (row.get("Organization Name") or "").strip()
@@ -77,6 +81,7 @@ def build_doc(row):
         "email1": (row.get("E-mail 1 - Value") or "").strip(),
         "notionUrl": row.get("url") or "",
         "source": "notion",
+        "ownerId": owner_uid,
         "syncedAt": firestore.SERVER_TIMESTAMP,
     }
 
@@ -86,6 +91,26 @@ def main():
         rows = json.load(f)
     print(f"Contactes al fitxer d'entrada: {len(rows)}")
 
+    if DRY_RUN:
+        prepared = []
+        skipped = 0
+        for row in rows:
+            nid = notion_id_from_url(row.get("url"))
+            if not nid:
+                skipped += 1
+                continue
+            prepared.append((nid, build_doc(row, "(uid-real-en-execucio)")))
+        if skipped:
+            print(f"AVIS: {skipped} files sense URL/ID valid, ignorades.")
+        for nid, doc in prepared[:10]:
+            print(f"[DRY] {nid} -> {doc['name']} | {doc['phone1'] or doc['phone2'] or '(sense telefon)'}")
+        print(f"[DRY] Es sincronitzarien {len(prepared)} contactes. Cap canvi fet.")
+        return
+
+    db = init_db()
+    owner_uid = auth.get_user_by_email(OWNER_EMAIL).uid
+    print(f"Propietari: {OWNER_EMAIL} -> uid={owner_uid}")
+
     prepared = []
     skipped = 0
     for row in rows:
@@ -93,18 +118,10 @@ def main():
         if not nid:
             skipped += 1
             continue
-        prepared.append((nid, build_doc(row)))
+        prepared.append((nid, build_doc(row, owner_uid)))
 
     if skipped:
-        print(f"AVIS: {skipped} files sense URL/ID vàlid, ignorades.")
-
-    if DRY_RUN:
-        for nid, doc in prepared[:10]:
-            print(f"[DRY] {nid} -> {doc['name']} | {doc['phone1'] or doc['phone2'] or '(sense telèfon)'}")
-        print(f"[DRY] Es sincronitzarien {len(prepared)} contactes. Cap canvi fet.")
-        return
-
-    db = init_db()
+        print(f"AVIS: {skipped} files sense URL/ID valid, ignorades.")
     batch = db.batch()
     count = 0
     for nid, doc in prepared:
@@ -115,7 +132,7 @@ def main():
             batch.commit()
             batch = db.batch()
     batch.commit()
-    print(f"Fet. {count} contactes sincronitzats a Firestore (col·lecció 'contacts').")
+    print(f"Fet. {count} contactes sincronitzats a Firestore (col·leccio 'contacts').")
 
 
 if __name__ == "__main__":

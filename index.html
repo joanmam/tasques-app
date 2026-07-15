@@ -929,8 +929,9 @@ function App() {
     // Directori d'usuaris registrats (per al desplegable de "Convida a informar")
     const unsubU=db.collection('users')
       .onSnapshot(snap=>{setAllUsers(snap.docs.map(d=>({uid:d.id,email:d.data().email})).filter(u=>u.email));});
-    // Directori de contactes (sincronitzat manualment des de Notion, veure scripts/sync_contacts_notion.py)
-    const unsubC=db.collection('contacts')
+    // Directori de contactes (sincronitzat des de Notion, veure scripts/*contacts*.py). Privat per
+    // usuari (ownerId) — cal filtrar per uid perquè les regles de Firestore permetin la lectura.
+    const unsubC=db.collection('contacts').where('ownerId','==',user.uid)
       .onSnapshot(snap=>{setContacts(snap.docs.map(d=>({id:d.id,...d.data()})));}, ()=>{});
     return()=>{unsubT();unsubL1();unsubL2();unsubS();unsubCL();unsubW();unsubU();unsubC();unsubA();sharedTasksUnsub();};
   },[user]);
