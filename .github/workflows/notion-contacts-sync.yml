@@ -1,0 +1,26 @@
+name: Sincronitza contactes de Notion
+
+# Cada dilluns a les 6:00 UTC (7:00/8:00 hora local segons horari d'estiu),
+# consulta la base "Contactes" de Notion (nomes els marcats "Personal") i
+# actualitza la col·leccio `contacts` de Firestore. Tambe es pot executar
+# manualment des de la pestanya Actions.
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instal·lar dependencies
+        run: pip install -r scripts/requirements.txt
+      - name: Sincronitzar contactes Notion -> Firestore
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+        run: python scripts/notion_contacts_weekly_sync.py
