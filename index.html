@@ -209,6 +209,16 @@
     .detail-date:focus{border-color:var(--accent)}
     .detail-input{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;padding:7px 10px;outline:none}
     .detail-input:focus{border-color:var(--accent)}
+    .contact-picker{position:relative}
+    .contact-picker-clear{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:none;background:none;cursor:pointer;color:var(--text3);font-size:13px;line-height:1;padding:4px}
+    .contact-picker-clear:hover{color:var(--text)}
+    .contact-picker-list{position:absolute;z-index:20;top:calc(100% + 4px);left:0;right:0;max-height:220px;overflow-y:auto;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+    .contact-picker-item{padding:7px 10px;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center}
+    .contact-picker-item:hover{background:var(--bg2)}
+    .contact-picker-item-phone{color:var(--text3);font-size:11px;flex-shrink:0}
+    .contact-picker-empty{padding:8px 10px;font-size:12px;color:var(--text3)}
+    .contact-picker-clearall{padding:7px 10px;font-size:12px;color:var(--text3);cursor:pointer;border-bottom:1px solid var(--border)}
+    .contact-picker-clearall:hover{background:var(--bg2)}
     .att-title-input{width:100%;background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-weight:600;font-family:inherit;padding:4px 7px;outline:none}
     .att-title-input:focus{border-color:var(--accent)}
     .detail-checkbox{width:16px;height:16px;cursor:pointer;accent-color:var(--accent)}
@@ -643,6 +653,18 @@ const buildDayGroups = (list, maxDateStr) => {
 };
 const save = (k,v) => { try{localStorage.setItem(k,JSON.stringify(v))}catch{} };
 const load = (k,d) => { try{return JSON.parse(localStorage.getItem(k))??d}catch{return d} };
+
+// Normalitza text per a cerca sense distinció d'accents/majúscules (p. ex. pel buscador de contactes)
+const normText = s => {
+  const str = (s||'').normalize('NFD');
+  let out = '';
+  for (let i=0;i<str.length;i++){
+    const code = str.charCodeAt(i);
+    if (code>=0x0300 && code<=0x036f) continue; // marques diacritiques combinades
+    out += str[i];
+  }
+  return out.toLowerCase();
+};
 
 const nextOccurrence = (dateStr, recurrence) => {
   const d = new Date(dateStr + 'T12:00');
@@ -2062,14 +2084,10 @@ function DetailPanel({task,lists,defaultFields,allTags,currentUserUid,currentUse
         </div>
         <div className="detail-field">
           <label>Contacte</label>
-          <select className="detail-select" value={local.contactId||''} onChange={e=>{
-            const c = (contacts||[]).find(x=>x.id===e.target.value);
+          <ContactPicker contacts={contacts} value={local.contactId||''} className="detail-select" onChange={id=>{
+            const c = (contacts||[]).find(x=>x.id===id);
             push({contactId:c?.id||'',contactName:c?.name||'',contactPhone:c?(c.phone1||c.phone2||''):''});
-          }}>
-            <option value="">— Cap —</option>
-            {(contacts||[]).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(c=>
-              <option key={c.id} value={c.id}>{c.name}{c.phone1||c.phone2?` · ${c.phone1||c.phone2}`:''}</option>)}
-          </select>
+          }}/>
         </div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
           <div className="detail-field">
@@ -2970,6 +2988,56 @@ function ConfirmMoveModal({task,newDateStr,onConfirm,onClose}) {
   );
 }
 
+// ─── CONTACT PICKER (buscador de contactes, sense distinció d'accents/majúscules) ─
+function ContactPicker({contacts,value,onChange,placeholder,className}) {
+  const [query,setQuery] = useState('');
+  const [open,setOpen] = useState(false);
+  const wrapRef = useRef(null);
+
+  useEffect(()=>{
+    const onDocClick = e => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  },[]);
+
+  const sorted = (contacts||[]).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  const selected = sorted.find(c=>c.id===value);
+  const q = normText(query);
+  const filtered = q ? sorted.filter(c=>{
+    const hay = normText([c.name,c.org,c.phone1,c.phone2,c.email1,c.category].filter(Boolean).join(' '));
+    return hay.includes(q);
+  }) : sorted;
+
+  const pick = c => { onChange(c.id); setQuery(''); setOpen(false); };
+  const clear = () => { onChange(''); setQuery(''); setOpen(false); };
+
+  return (
+    <div className="contact-picker" ref={wrapRef}>
+      <input className={className||'input'} placeholder={placeholder||'Cerca un contacte (nom, telèfon, empresa...)'}
+        value={open ? query : (selected ? `${selected.name}${selected.phone1||selected.phone2?' · '+(selected.phone1||selected.phone2):''}` : '')}
+        onFocus={()=>{setOpen(true);setQuery('');}}
+        onChange={e=>{setQuery(e.target.value);setOpen(true);}}
+        style={selected?{paddingRight:26}:undefined}/>
+      {selected&&!open&&(
+        <button type="button" className="contact-picker-clear" title="Treu el contacte" onClick={clear}>✕</button>
+      )}
+      {open&&(
+        <div className="contact-picker-list">
+          {value&&<div className="contact-picker-clearall" onClick={clear}>— Cap —</div>}
+          {filtered.length===0
+            ? <div className="contact-picker-empty">Cap contacte trobat</div>
+            : filtered.slice(0,50).map(c=>(
+                <div key={c.id} className="contact-picker-item" onClick={()=>pick(c)}>
+                  <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.name}</span>
+                  {(c.phone1||c.phone2)&&<span className="contact-picker-item-phone">{c.phone1||c.phone2}</span>}
+                </div>
+              ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── NEW TASK MODAL ───────────────────────────────────────────────────────────
 function NewTaskModal({lists,defaultFields,defaultList,contacts,onSave,onClose,preFill}) {
   const [form,setForm] = useState(()=>{
@@ -3018,10 +3086,8 @@ function NewTaskModal({lists,defaultFields,defaultList,contacts,onSave,onClose,p
         <input type="url" className="input" placeholder="URL (opcional)" value={form.url}
           onChange={e=>set('url',e.target.value)}/>
         {sortedContacts.length>0&&(
-          <select className="input" value={form.contactId} onChange={e=>setContact(e.target.value)}>
-            <option value="">— Contacte (opcional) —</option>
-            {sortedContacts.map(c=><option key={c.id} value={c.id}>{c.name}{c.phone1||c.phone2?` · ${c.phone1||c.phone2}`:''}</option>)}
-          </select>
+          <ContactPicker contacts={contacts} value={form.contactId} placeholder="Contacte (opcional) — cerca per nom, telèfon..."
+            onChange={id=>setContact(id)}/>
         )}
         <div className="input-row">
           <select className="input" value={form.priority} onChange={e=>set('priority',e.target.value)}>
