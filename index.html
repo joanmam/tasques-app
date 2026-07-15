@@ -688,6 +688,7 @@ const Ic = {
   chart:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
   search:   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
   link:     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>,
+  phone:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.362 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>,
 };
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
@@ -775,6 +776,7 @@ function App() {
   const [completionLogs,setCompletionLogs] = useState([]);
   const [watchedTasks,setWatchedTasks]     = useState([]); // tasques d'altres on m'han convidat a "informar-me" (només lectura)
   const [allUsers,setAllUsers]             = useState([]); // {uid,email} de tots els usuaris registrats (per al desplegable de "Convida a informar")
+  const [contacts,setContacts]             = useState([]); // directori de contactes sincronitzat manualment des de Notion
   const [syncing,setSyncing]         = useState(false);
   const [toast,setToast]             = useState('');
   const showToast = msg => { setToast(msg); setTimeout(()=>setToast(''),3000); };
@@ -905,7 +907,10 @@ function App() {
     // Directori d'usuaris registrats (per al desplegable de "Convida a informar")
     const unsubU=db.collection('users')
       .onSnapshot(snap=>{setAllUsers(snap.docs.map(d=>({uid:d.id,email:d.data().email})).filter(u=>u.email));});
-    return()=>{unsubT();unsubL1();unsubL2();unsubS();unsubCL();unsubW();unsubU();unsubA();sharedTasksUnsub();};
+    // Directori de contactes (sincronitzat manualment des de Notion, veure scripts/sync_contacts_notion.py)
+    const unsubC=db.collection('contacts')
+      .onSnapshot(snap=>{setContacts(snap.docs.map(d=>({id:d.id,...d.data()})));}, ()=>{});
+    return()=>{unsubT();unsubL1();unsubL2();unsubS();unsubCL();unsubW();unsubU();unsubC();unsubA();sharedTasksUnsub();};
   },[user]);
 
   useEffect(()=>{
@@ -1827,12 +1832,12 @@ function App() {
               onUpdate={updateTask} onDelete={canDeleteTask(selectedTask)?()=>requestDelete(selectedTask):null}
               onClose={()=>setSelectedTask(null)} onDelay={delayTask}
               onInviteWatcher={inviteToTask} onRemoveWatcher={removeWatcher}
-              onAssign={assignTask} onUnassign={unassignTask} allUsers={allUsers}/>
+              onAssign={assignTask} onUnassign={unassignTask} allUsers={allUsers} contacts={contacts}/>
           )
         )}
       </div>
 
-      {showModal&&<NewTaskModal lists={lists} defaultFields={defaultFields}
+      {showModal&&<NewTaskModal lists={lists} defaultFields={defaultFields} contacts={contacts}
         defaultList={(!DATE_QUICK_VIEWS.includes(selectedList)&&selectedList!=='all'&&selectedList!=='seguiment')?selectedList:(lists.find(l=>l.name==='Tasques')?.id||lists[0]?.id)}
         preFill={voicePreFill}
         onSave={addTask} onClose={()=>{setShowModal(false);setVoicePreFill(null);}}/>}
@@ -1918,6 +1923,9 @@ function TaskItem({task,lists,selected,onClick,onToggle,onDelete,onDelay,onTrack
           {task.reminderMinutes>0&&<span className="task-meta-item" title="Recordatori actiu">{Ic.bell}</span>}
           {task.url&&<a className="task-meta-item" href={task.url} target="_blank" rel="noopener noreferrer"
             onClick={e=>e.stopPropagation()} title={task.url} style={{textDecoration:'none',color:'var(--accent)'}}>{Ic.link} Enllaç</a>}
+          {task.contactPhone&&<a className="task-meta-item" href={`tel:${task.contactPhone.replace(/\s+/g,'')}`}
+            onClick={e=>e.stopPropagation()} title={task.contactName?`${task.contactName}: ${task.contactPhone}`:task.contactPhone}
+            style={{textDecoration:'none',color:'var(--accent)'}}>{Ic.phone} {task.contactName||task.contactPhone}</a>}
           {list&&<span className="task-meta-item" style={{color:list.color}}>{Ic.folder} {list.name}</span>}
           {assignedOnly&&<span className="task-meta-item" title="Tasca assignada a mi" style={{color:'var(--accent)'}}>{Ic.person} Assignada a mi</span>}
           {!assignedOnly&&task.assigneeEmail&&<span className="task-meta-item" title="Assignada a algu">{Ic.person} {task.assigneeEmail}</span>}
@@ -1950,7 +1958,7 @@ function TaskItem({task,lists,selected,onClick,onToggle,onDelete,onDelay,onTrack
 }
 
 // ─── DETAIL PANEL ─────────────────────────────────────────────────────────────
-function DetailPanel({task,lists,defaultFields,allTags,currentUserUid,currentUserEmail,onUpdate,onDelete,onClose,onDelay,onInviteWatcher,onRemoveWatcher,onAssign,onUnassign,allUsers}) {
+function DetailPanel({task,lists,defaultFields,allTags,currentUserUid,currentUserEmail,onUpdate,onDelete,onClose,onDelay,onInviteWatcher,onRemoveWatcher,onAssign,onUnassign,allUsers,contacts}) {
   const [local,setLocal] = useState(task);
   const [tagInput,setTagInput] = useState('');
   const timer = useRef(null);
@@ -2051,6 +2059,17 @@ function DetailPanel({task,lists,defaultFields,allTags,currentUserUid,currentUse
           <label>URL</label>
           <input type="url" className="detail-date" value={local.url||''} placeholder="https://..."
             onChange={e=>push({url:e.target.value})}/>
+        </div>
+        <div className="detail-field">
+          <label>Contacte</label>
+          <select className="detail-select" value={local.contactId||''} onChange={e=>{
+            const c = (contacts||[]).find(x=>x.id===e.target.value);
+            push({contactId:c?.id||'',contactName:c?.name||'',contactPhone:c?(c.phone1||c.phone2||''):''});
+          }}>
+            <option value="">— Cap —</option>
+            {(contacts||[]).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(c=>
+              <option key={c.id} value={c.id}>{c.name}{c.phone1||c.phone2?` · ${c.phone1||c.phone2}`:''}</option>)}
+          </select>
         </div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
           <div className="detail-field">
@@ -2952,7 +2971,7 @@ function ConfirmMoveModal({task,newDateStr,onConfirm,onClose}) {
 }
 
 // ─── NEW TASK MODAL ───────────────────────────────────────────────────────────
-function NewTaskModal({lists,defaultFields,defaultList,onSave,onClose,preFill}) {
+function NewTaskModal({lists,defaultFields,defaultList,contacts,onSave,onClose,preFill}) {
   const [form,setForm] = useState(()=>{
     // Durada per defecte d'una hora. Sense cap pista (creació manual): comença a la propera hora en
     // punt. Si el preFill (p. ex. la veu, que només dona "a les 15:00") només coneix un dels dos
@@ -2972,6 +2991,7 @@ function NewTaskModal({lists,defaultFields,defaultList,onSave,onClose,preFill}) 
       title:preFill?.title||'',description:'',url:preFill?.url||'',startDate:preFill?.endDate||today,
       endDate:preFill?.endDate||today,startTime,endTime,
       priority:'mitjana',status:'pendent',tags:[],
+      contactId:'',contactName:'',contactPhone:'',
       listId:preFill?.listId||defaultList||lists[0]?.id||'',subtasks:[],customValues:{},
       reminderMinutes:0,recurrence:'none',recurrenceEndDate:''
     };
@@ -2980,8 +3000,13 @@ function NewTaskModal({lists,defaultFields,defaultList,onSave,onClose,preFill}) 
   const ref = useRef(null);
   useEffect(()=>ref.current?.focus(),[]);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
+  const setContact = contactId => {
+    const c = (contacts||[]).find(x=>x.id===contactId);
+    setForm(f=>({...f,contactId:c?.id||'',contactName:c?.name||'',contactPhone:c?(c.phone1||c.phone2||''):''}));
+  };
   const addTag = t => {t=t.trim().toLowerCase();if(t&&!form.tags.includes(t))set('tags',[...form.tags,t]);setTagInput('');};
   const submit = () => {if(!form.title.trim())return;onSave(form);};
+  const sortedContacts = (contacts||[]).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   return (
     <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div className="modal">
@@ -2992,6 +3017,12 @@ function NewTaskModal({lists,defaultFields,defaultList,onSave,onClose,preFill}) 
           onChange={e=>set('description',e.target.value)} style={{resize:'vertical',minHeight:52}}/>
         <input type="url" className="input" placeholder="URL (opcional)" value={form.url}
           onChange={e=>set('url',e.target.value)}/>
+        {sortedContacts.length>0&&(
+          <select className="input" value={form.contactId} onChange={e=>setContact(e.target.value)}>
+            <option value="">— Contacte (opcional) —</option>
+            {sortedContacts.map(c=><option key={c.id} value={c.id}>{c.name}{c.phone1||c.phone2?` · ${c.phone1||c.phone2}`:''}</option>)}
+          </select>
+        )}
         <div className="input-row">
           <select className="input" value={form.priority} onChange={e=>set('priority',e.target.value)}>
             <option value="alta">Alta</option><option value="mitjana">Mitjana</option><option value="baixa">Baixa</option>
