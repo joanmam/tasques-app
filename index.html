@@ -481,6 +481,59 @@ const weekLaterStr = (() => { const d=new Date(); d.setDate(d.getDate()+7); retu
 const taskDueStr = t => t.seriesId ? t.endDate : (t.endDate || t.startDate || '');
 // Vistes ràpides per data, mostrades a la barra lateral sota "Avui"
 const DATE_QUICK_VIEWS = ['today','tomorrow','next3','next7'];
+// ─── PLANTILLA DE SUBTASQUES PER ETIQUETA (AuditGDP) ───────────────────────
+// Suma/resta dies naturals a una data YYYY-MM-DD
+const addDays = (dateStr, n) => { const d=new Date(dateStr+'T12:00'); d.setDate(d.getDate()+n); return ymd(d); };
+// Suma/resta setmanes naturals (1 setmana = 7 dies)
+const addWeeks = (dateStr, n) => addDays(dateStr, n*7);
+// Suma/resta mesos naturals
+const addMonths = (dateStr, n) => { const d=new Date(dateStr+'T12:00'); d.setMonth(d.getMonth()+n); return ymd(d); };
+// Suma/resta dies laborables (dilluns-divendres, sense festius)
+const addBusinessDays = (dateStr, n) => {
+  const d = new Date(dateStr+'T12:00');
+  let remaining = Math.abs(n), step = n>=0?1:-1;
+  while (remaining>0) { d.setDate(d.getDate()+step); const dow=d.getDay(); if(dow!==0&&dow!==6) remaining--; }
+  return ymd(d);
+};
+// Nom del camp personalitzat (a la llista "Auditorias") que porta la data de l'auditoria
+const AUDIT_DATE_FIELD_NAME = 'data auditoria';
+const AUDITGDP_TAG = 'auditgdp';
+const findAuditDateField = list => (list?.fields||[]).find(f=>f.type==='date'&&f.name.trim().toLowerCase()===AUDIT_DATE_FIELD_NAME);
+// Plantilla fixa de subtasques d'una auditoria GDP (basada en Subtasques.xlsx).
+// sowDate = data de creació de la tasca ("Data SOW"); auditDate = data de l'auditoria.
+const buildAuditGdpSubtasks = (auditDate, sowDate) => {
+  if (!auditDate) return [];
+  const mk = (title, start, due) => ({id:uid(), title, done:false, start, due});
+  return [
+    mk('Auditoria',                    auditDate, auditDate),
+    mk('Hacer Carpetas con estructura', sowDate,  sowDate),
+    mk('Plan del viaje',               addWeeks(auditDate,-5), addWeeks(auditDate,-4)),
+    mk('Revisar agenda',               addWeeks(sowDate,1),    addWeeks(sowDate,1)),
+    mk('Revisar doc',                  addWeeks(auditDate,-1), addWeeks(auditDate,-1)),
+    mk('Report',                       addBusinessDays(auditDate,7), addBusinessDays(auditDate,7)),
+    mk('Gastos',                       addBusinessDays(auditDate,2), addBusinessDays(auditDate,2)),
+    mk('Revision report',              addWeeks(auditDate,1),  addWeeks(auditDate,1)),
+    mk('Facturacion',                  addWeeks(auditDate,4),  addWeeks(auditDate,4)),
+  ];
+};
+// Aplica la plantilla AuditGDP a les dades d'una tasca nova si porta l'etiqueta i ja te la data
+// d'auditoria omplerta, sense sobreescriure subtasques o dates que l'usuari ja hagi posat.
+const applyAuditGdpTemplate = (data, lists) => {
+  const tags = (data.tags||[]).map(t=>String(t).toLowerCase());
+  if (!tags.includes(AUDITGDP_TAG)) return data;
+  const list = lists.find(l=>l.id===data.listId);
+  const auditField = findAuditDateField(list);
+  const auditDate = auditField ? (data.customValues||{})[auditField.id] : null;
+  if (!auditDate) return data;
+  if ((data.subtasks||[]).length>0) return data; // ja en te, no ho toquem
+  const sowDate = data.startDate || today;
+  return {
+    ...data,
+    subtasks: buildAuditGdpSubtasks(auditDate, sowDate),
+    startDate: data.startDate || sowDate,
+    endDate:   data.endDate   || addMonths(auditDate,1),
+  };
+};
 // ─── GOOGLE CALENDAR ────────────────────────────────────────────────────────
 const GCAL_TOKEN_KEY = 'tq_gcal_token';
 const GCAL_EXPIRY_KEY = 'tq_gcal_token_expiry';
@@ -1106,6 +1159,7 @@ function App() {
   };
   const addTask = async data => {
     setSyncing(true);
+    data = applyAuditGdpTemplate(data, lists);
     if (data.recurrence && data.recurrence !== 'none') {
       // Genera totes les instàncies de la sèrie
       const seriesId = db.collection('tasks').doc().id;
@@ -1670,6 +1724,9 @@ function App() {
                 <button className={`view-btn ${view==='gantt'?'active':''}`} onClick={()=>setView('gantt')}>
                   <span style={{width:13,height:13}}>{Ic.gantt}</span> Gantt
                 </button>
+                <button className={`view-btn ${view==='subtasks'?'active':''}`} onClick={()=>setView('subtasks')}>
+                  <span style={{width:13,height:13}}>{Ic.check}</span> Subtasques
+                </button>
               </div>
               <div className="search-box">
                 <span className="search-box-icon">{Ic.search}</span>
@@ -1793,6 +1850,8 @@ function App() {
                 gcalToken={gcalToken} gcalEvents={gcalEvents} setGcalEvents={setGcalEvents} gcalError={gcalError} setGcalError={setGcalError} gcalCalendars={gcalCalendars}/>
             ) : view==='matrix' ? (
               <MatrixView tasks={filtered} lists={lists} defaultFields={defaultFields} selectedTask={selectedTask} onSelectTask={setSelectedTask}/>
+            ) : view==='subtasks' ? (
+              <SubtasksView tasks={filtered} lists={lists} selectedTask={selectedTask} onSelectTask={setSelectedTask}/>
             ) : (
             <div className="content">
               {pendents.length===0&&completades.length===0&&(
@@ -1980,6 +2039,38 @@ function TaskItem({task,lists,selected,onClick,onToggle,onDelete,onDelay,onTrack
   );
 }
 
+// ─── SUBTASQUES PENDENTS (vista transversal) ───────────────────────────────
+// Aplana totes les subtasques no fetes de totes les tasques, amb el nom de la tasca pare,
+// independentment de a quina tasca pertanyen. Ordenades per data de venciment.
+function SubtasksView({tasks,lists,selectedTask,onSelectTask}) {
+  const listName = id => lists.find(l=>l.id===id)?.name || 'Sense llista';
+  const rows = tasks
+    .flatMap(t => (t.subtasks||[])
+      .filter(s => !s.done && (s.title||'').trim())
+      .map(s => ({...s, task:t})))
+    .sort((a,b) => (a.due||'9999-99-99').localeCompare(b.due||'9999-99-99'));
+  if (!rows.length) {
+    return <div className="empty-state">{Ic.check}<p>Cap subtasca pendent.</p></div>;
+  }
+  return (
+    <div className="content">
+      {rows.map(s => (
+        <div key={s.task.id+'-'+s.id} className={`task-item ${selectedTask?.id===s.task.id?'selected':''}`}
+          onClick={()=>onSelectTask(s.task)}>
+          <div className={`subtask-check`} style={{marginTop:2,cursor:'default'}}/>
+          <div className="task-body">
+            <div className="task-title">{s.title}</div>
+            <div className="task-meta">
+              <span style={{fontSize:11,color:'var(--text3)'}}>{s.task.title} · {listName(s.task.listId)}</span>
+              {s.due && <span className="date-badge date-later">{Ic.calendar}{fmtList(s.due)}</span>}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── DETAIL PANEL ─────────────────────────────────────────────────────────────
 function DetailPanel({task,lists,defaultFields,allTags,currentUserUid,currentUserEmail,onUpdate,onDelete,onClose,onDelay,onInviteWatcher,onRemoveWatcher,onAssign,onUnassign,allUsers,contacts}) {
   const [local,setLocal] = useState(task);
@@ -2001,6 +2092,26 @@ function DetailPanel({task,lists,defaultFields,allTags,currentUserUid,currentUse
   const customFields = list?.fields||[];
   const customValues = local.customValues||{};
   const setCustomValue = (fid,val) => push({customValues:{...customValues,[fid]:val}});
+  // ─── Plantilla AuditGDP ───
+  const hasAuditGdpTag = (local.tags||[]).map(t=>String(t).toLowerCase()).includes(AUDITGDP_TAG);
+  const auditDateField = findAuditDateField(list);
+  const auditDateValue = auditDateField ? customValues[auditDateField.id] : null;
+  const [templateMsg,setTemplateMsg] = useState('');
+  const applyAuditTemplate = () => {
+    if (!auditDateField) { setTemplateMsg('La llista no te el camp "Data Auditoria".'); return; }
+    if (!auditDateValue) { setTemplateMsg('Omple primer la "Data Auditoria".'); return; }
+    const sowDate = local.startDate || today;
+    const fresh = buildAuditGdpSubtasks(auditDateValue, sowDate);
+    const existingTitles = new Set((local.subtasks||[]).map(s=>s.title.trim().toLowerCase()));
+    const toAdd = fresh.filter(s=>!existingTitles.has(s.title.trim().toLowerCase()));
+    if (!toAdd.length) { setTemplateMsg('Ja hi son totes.'); return; }
+    commit({
+      subtasks:[...(local.subtasks||[]),...toAdd],
+      startDate: local.startDate || sowDate,
+      endDate:   local.endDate   || addMonths(auditDateValue,1),
+    });
+    setTemplateMsg(`Afegides ${toAdd.length} subtasques.`);
+  };
   // Adjuncions (Firebase Storage)
   const fileRef = useRef(null);
   const [uploading,setUploading] = useState(false);
@@ -2269,10 +2380,20 @@ function DetailPanel({task,lists,defaultFields,allTags,currentUserUid,currentUse
                 <div className={`subtask-check ${s.done?'checked':''}`} onClick={()=>updSubtask(s.id,{done:!s.done})}/>
                 <input value={s.title} placeholder="Subtasca..." onChange={e=>updSubtask(s.id,{title:e.target.value})}
                   style={s.done?{textDecoration:'line-through',opacity:.5}:{}}/>
+                <input type="date" className="detail-date" style={{width:126,flexShrink:0}} value={s.due||''}
+                  onChange={e=>updSubtask(s.id,{due:e.target.value})} title="Data de venciment"/>
                 <span className="del" onClick={()=>delSubtask(s.id)}>×</span>
               </div>
             ))}
             <button className="add-subtask-btn" onClick={addSubtask}>{Ic.plus} Afegir subtasca</button>
+            {hasAuditGdpTag && (
+              <div style={{marginTop:6,display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+                <button className="btn btn-ghost" style={{fontSize:12,padding:'6px 12px'}} onClick={applyAuditTemplate}>
+                  Aplica plantilla AuditGDP
+                </button>
+                {templateMsg && <span style={{fontSize:11,color:'var(--text3)'}}>{templateMsg}</span>}
+              </div>
+            )}
           </div>
         </div>
         {isShared && (
