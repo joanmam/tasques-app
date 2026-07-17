@@ -2043,18 +2043,35 @@ function TaskItem({task,lists,selected,onClick,onToggle,onDelete,onDelay,onTrack
 // Aplana totes les subtasques no fetes de totes les tasques, amb el nom de la tasca pare,
 // independentment de a quina tasca pertanyen. Ordenades per data de venciment.
 function SubtasksView({tasks,lists,selectedTask,onSelectTask}) {
+  const [filterTaskId,setFilterTaskId] = useState('all');
   const listName = id => lists.find(l=>l.id===id)?.name || 'Sense llista';
-  const rows = tasks
+  const allRows = tasks
     .flatMap(t => (t.subtasks||[])
       .filter(s => !s.done && (s.title||'').trim())
       .map(s => ({...s, task:t})))
     .sort((a,b) => (a.due||'9999-99-99').localeCompare(b.due||'9999-99-99'));
-  if (!rows.length) {
-    return <div className="empty-state">{Ic.check}<p>Cap subtasca pendent.</p></div>;
-  }
+  // Nomes les tasques que tenen alguna subtasca pendent, per no omplir el desplegable de soroll.
+  const taskOptions = [...new Map(allRows.map(r=>[r.task.id,r.task])).values()]
+    .sort((a,b)=>(a.title||'').localeCompare(b.title||''));
+  const rows = filterTaskId==='all' ? allRows : allRows.filter(r=>r.task.id===filterTaskId);
   return (
     <div className="content">
-      {rows.map(s => (
+      {taskOptions.length>0 && (
+        <div style={{marginBottom:12}}>
+          <select className="detail-select" style={{maxWidth:320}} value={filterTaskId}
+            onChange={e=>setFilterTaskId(e.target.value)}>
+            <option value="all">Totes les tasques ({allRows.length})</option>
+            {taskOptions.map(t=>(
+              <option key={t.id} value={t.id}>
+                {t.title} ({allRows.filter(r=>r.task.id===t.id).length})
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      {rows.length===0 ? (
+        <div className="empty-state">{Ic.check}<p>Cap subtasca pendent.</p></div>
+      ) : rows.map(s => (
         <div key={s.task.id+'-'+s.id} className={`task-item ${selectedTask?.id===s.task.id?'selected':''}`}
           onClick={()=>onSelectTask(s.task)}>
           <div className={`subtask-check`} style={{marginTop:2,cursor:'default'}}/>
