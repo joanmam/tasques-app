@@ -855,8 +855,9 @@ function App() {
   const [syncing,setSyncing]         = useState(false);
   const [toast,setToast]             = useState('');
   const showToast = msg => { setToast(msg); setTimeout(()=>setToast(''),3000); };
-  const [selectedList,setSelectedList]   = useState('all');
-  const [selectedLists,setSelectedLists] = useState([]); // seleccio de diverses llistes alhora (checkboxes a la barra lateral)
+  const [selectedList,setSelectedList]   = useState('all'); // 'all' | 'seguiment' | 'watched:{uid}' | 'assignedTo:{uid}' | 'assignedBy:{uid}'
+  const [selectedLists,setSelectedLists] = useState([]); // seleccio de llistes (checkboxes a la barra lateral); buit = totes
+  const [timeFilter,setTimeFilter]       = useState('all'); // 'all' | 'today' | 'tomorrow' | 'next3' | 'next7' — barra horitzontal de dalt
   const [selectedGroup,setSelectedGroup] = useState('all');
   const [selectedTask,setSelectedTask]   = useState(null);
   const [filterStatus,setFilterStatus]   = useState('all');
@@ -1418,7 +1419,7 @@ function App() {
   };
 
   const allTags = [...new Set(tasks.flatMap(t=>t.tags||[]))];
-  // Vistes especials de "Informat per" / "Assignades a" / "Assignades per" (no son llistes reals)
+  // Vistes especials de "Informat per" / "Assignades a" / "Assignades per" / "Seguiment" (no son llistes reals)
   const isWatchedView = typeof selectedList==='string' && selectedList.startsWith('watched:');
   const isAssignedToView = typeof selectedList==='string' && selectedList.startsWith('assignedTo:'); // jo he assignat a algu (vist des del creador)
   const isAssignedByView = typeof selectedList==='string' && selectedList.startsWith('assignedBy:'); // m'han assignat a mi (vist des de l'assignat)
@@ -1426,57 +1427,42 @@ function App() {
   const assignedToUid = isAssignedToView ? selectedList.slice(11) : null;
   const assignedByUid = isAssignedByView ? selectedList.slice(11) : null;
   const isPseudoList = isWatchedView || isAssignedToView || isAssignedByView;
-  // Mode "diverses llistes alhora" (checkboxes a la barra lateral), independent del selectedList habitual
-  const isMultiListMode = selectedLists.length>0;
-  // Camps personalitzats de la llista seleccionada que es poden filtrar (select/checkbox)
-  const isSpecificList = !isMultiListMode && !DATE_QUICK_VIEWS.includes(selectedList)&&selectedList!=='all'&&selectedList!=='seguiment'&&!isPseudoList;
-  const customFilterFields = isSpecificList
-    ? (lists.find(l=>l.id===selectedList)?.fields||[]).filter(f=>f.type==='select'||f.type==='checkbox')
+  // Camps personalitzats filtrables: nomes quan hi ha exactament una llista marcada (amb diverses o cap, no se sap quins camps mostrar)
+  const customFilterFields = selectedLists.length===1
+    ? (lists.find(l=>l.id===selectedLists[0])?.fields||[]).filter(f=>f.type==='select'||f.type==='checkbox')
     : [];
   // Camps per defecte filtrables (select/checkbox), aplicables a totes les vistes des de la barra lateral
   const defaultFilterFields = (defaultFields||[]).filter(f=>f.type==='select'||f.type==='checkbox');
-  // Grups de llistes (Professional/Personal/...) per organitzar la barra lateral i filtrar
+  // Grups de llistes (Professional/Personal/...): nomes organitzen com es mostren les llistes a la barra lateral
   const listGroupOf = listId => lists.find(l=>l.id===listId)?.group || 'Sense grup';
   const presentGroups = [...new Set(lists.map(l=>l.group||'Sense grup'))];
   const orderedGroups = [...LIST_GROUPS.filter(g=>presentGroups.includes(g)), ...presentGroups.filter(g=>!LIST_GROUPS.includes(g))];
-  // El filtre de grup només s'aplica a vistes generals (Totes, Avui, Demà...), no quan ja s'ha triat una llista concreta (o diverses)
-  const matchesGroup = t => isSpecificList || isMultiListMode || selectedGroup==='all' || listGroupOf(t.listId)===selectedGroup;
   const toggleSelectedList = id => {
     // Si veniem d'una vista especial (Seguiment/Informat per/Assignades), en sortim en marcar caselles
-    // perque la seleccio de diverses llistes es mostri amb el renderitzat normal (filtered/pendents/completades).
-    if (selectedList==='seguiment' || isPseudoList) setSelectedList('all');
+    // perque la seleccio de llistes es mostri amb el renderitzat normal (filtered/pendents/completades).
+    if (selectedList!=='all') setSelectedList('all');
     setSelectedLists(ls=>ls.includes(id)?ls.filter(x=>x!==id):[...ls,id]);
   };
-  // Per a les vistes "Pròxims 3/7 dies": la tasca hi entra si algun dia del seu rang [inici,fi] cau dins
-  // la finestra [avui, maxStr], no només si el seu dia de venciment hi cau (així una tasca de diversos dies
-  // que comença dins la finestra però acaba més tard també hi apareix, als dies intermedis que li toquin).
+  // Per a "Pròxims 3/7 dies": la tasca hi entra si algun dia del seu rang [inici,fi] cau dins la finestra
+  // [avui, maxStr], no només si el seu dia de venciment hi cau (així una tasca de diversos dies que comença
+  // dins la finestra però acaba més tard també hi apareix, als dies intermedis que li toquin).
   const inDateWindow = (t, maxStr) => {
     if (t.seriesId) { const d=t.endDate; return !!d && d>=today && d<=maxStr; }
     const s = t.startDate||t.endDate, e = t.endDate||t.startDate;
     if (!s && !e) return false;
     return s<=maxStr && e>=today;
   };
-  const filtered = tasks.filter(t=>{
-    if (isMultiListMode) {
-      if (!selectedLists.includes(t.listId)) return false;
-    }
-    else if (selectedList==='today'){
-      // Per a ocurrències de tasques repetides, només compta la data de l'ocurrència (endDate),
-      // ja que totes comparteixen la mateixa startDate original.
-      if (t.seriesId) { if (t.endDate!==today) return false; }
-      else if (t.startDate!==today&&t.endDate!==today) return false;
-    }
-    else if (selectedList==='tomorrow'){ if (taskDueStr(t)!==tomorrowStr) return false; }
-    else if (selectedList==='next3'){ if(!inDateWindow(t,threeDayLaterStr)) return false; }
-    else if (selectedList==='next7'){ if(!inDateWindow(t,weekLaterStr)) return false; }
-    else if (typeof selectedList==='string'&&selectedList.startsWith('assignedTo:')){
+  // Filtres comuns a totes les vistes (llistes, vistes especials d'assignacio, cerca, estat, prioritat, etiqueta,
+  // camps personalitzats): tot MENYS el filtre de temps (Avui/Demà/...), que el Gantt no fa servir (te la seva
+  // propia logica de vigents+vençudes) pero la resta de vistes si.
+  const passesCommonFilters = t => {
+    if (selectedLists.length>0 && !selectedLists.includes(t.listId)) return false;
+    if (typeof selectedList==='string'&&selectedList.startsWith('assignedTo:')){
       const uid=selectedList.slice(11); if(t.ownerId!==user.uid||t.assigneeId!==uid) return false;
     }
     else if (typeof selectedList==='string'&&selectedList.startsWith('assignedBy:')){
       const uid=selectedList.slice(11); if(t.assigneeId!==user.uid||t.ownerId!==uid) return false;
     }
-    else if (selectedList!=='all'&&selectedList!=='seguiment'){if(t.listId!==selectedList)return false;}
-    if (!matchesGroup(t)) return false;
     if (!matchesSearch(t)) return false;
     if (filterStatus!=='all'&&t.status!==filterStatus) return false;
     if (filterPriority!=='all'&&t.priority!==filterPriority) return false;
@@ -1485,25 +1471,35 @@ function App() {
       const fv = filterCustom[f.id];
       if (fv===undefined||fv==='all') continue;
       const cv = (t.customValues||{})[f.id];
-      if (f.type==='checkbox') {
-        if (String(!!cv)!==fv) return false;
-      } else {
-        if ((cv??'')!==fv) return false;
-      }
+      if (f.type==='checkbox') { if (String(!!cv)!==fv) return false; }
+      else { if ((cv??'')!==fv) return false; }
     }
     // Filtres pels "camps per defecte" (s'apliquen a totes les vistes, des de la barra lateral)
     for (const f of defaultFilterFields) {
       const fv = filterCustom[f.id];
       if (fv===undefined||fv==='all') continue;
       const cv = (t.customValues||{})[f.id];
-      if (f.type==='checkbox') {
-        if (String(!!cv)!==fv) return false;
-      } else {
-        if ((cv??'')!==fv) return false;
-      }
+      if (f.type==='checkbox') { if (String(!!cv)!==fv) return false; }
+      else { if ((cv??'')!==fv) return false; }
     }
     return true;
+  };
+  const filtered = tasks.filter(t=>{
+    if (!passesCommonFilters(t)) return false;
+    if (timeFilter==='today'){
+      // Per a ocurrències de tasques repetides, només compta la data de l'ocurrència (endDate),
+      // ja que totes comparteixen la mateixa startDate original.
+      if (t.seriesId) { if (t.endDate!==today) return false; }
+      else if (t.startDate!==today&&t.endDate!==today) return false;
+    }
+    else if (timeFilter==='tomorrow'){ if (taskDueStr(t)!==tomorrowStr) return false; }
+    else if (timeFilter==='next3'){ if(!inDateWindow(t,threeDayLaterStr)) return false; }
+    else if (timeFilter==='next7'){ if(!inDateWindow(t,weekLaterStr)) return false; }
+    return true;
   });
+  // Tasques per al Gantt: els mateixos filtres comuns, pero sense el filtre de temps (el Gantt nomes
+  // ensenya vigents+vençudes, independentment d'Avui/Demà/Pròxims dies).
+  const ganttTasks = tasks.filter(passesCommonFilters);
   // Ordena per dia d'inici ascendent (i per hora d'inici com a desempat).
   // Excepció: en una tasca recurrent cal mirar endDate (startDate es identic a
   // totes les ocurrencies de la serie i no serveix per ordenar-les entre elles).
@@ -1516,30 +1512,20 @@ function App() {
   };
   const pendents    = filtered.filter(t=>t.status!=='completada').sort(byStartDate);
   const completades = filtered.filter(t=>t.status==='completada').sort(byStartDate);
-  const countFor = id => tasks.filter(t=>{
-    if (t.status==='completada') return false;
-    if (!matchesGroup(t)) return false;
-    if (id==='today') return t.seriesId?t.endDate===today:(t.startDate===today||t.endDate===today);
-    if (id==='tomorrow') return taskDueStr(t)===tomorrowStr;
-    if (id==='next3') return inDateWindow(t,threeDayLaterStr);
-    if (id==='next7') return inDateWindow(t,weekLaterStr);
-    return t.listId===id;
-  }).length;
+  const countFor = id => tasks.filter(t=>t.status!=='completada'&&t.listId===id).length;
   // Resolt l'email d'un uid: primer l'ownerEmail guardat a la tasca (tasques noves),
   // si no, el cerca al directori d'usuaris (tasques antigues sense ownerEmail); si tampoc, l'uid en cru.
   const emailForUid = (uid, knownEmail) => knownEmail || allUsers.find(u=>u.uid===uid)?.email || uid;
-  const listName = isMultiListMode
-    ? `${selectedLists.length} llistes: ${lists.filter(l=>selectedLists.includes(l.id)).map(l=>l.name).join(', ')}`
-    : selectedList==='all'?'Totes les tasques'
-    :selectedList==='today'?'Avui'
-    :selectedList==='tomorrow'?'Demà'
-    :selectedList==='next3'?'Pròxims 3 dies'
-    :selectedList==='next7'?'Pròxims 7 dies'
-    :selectedList==='seguiment'?'Seguiment'
-    :isWatchedView?`Informat per ${emailForUid(watchedOwnerId, watchedTasks.find(t=>t.ownerId===watchedOwnerId)?.ownerEmail)}`
-    :isAssignedToView?`Assignades a ${emailForUid(assignedToUid, tasks.find(t=>t.assigneeId===assignedToUid)?.assigneeEmail)}`
-    :isAssignedByView?`Assignades per ${emailForUid(assignedByUid, tasks.find(t=>t.ownerId===assignedByUid)?.ownerEmail)}`
-    :lists.find(l=>l.id===selectedList)?.name??'';
+  const TIME_FILTER_LABELS = {today:'Avui',tomorrow:'Demà',next3:'Pròxims 3 dies',next7:'Pròxims 7 dies'};
+  const listName = (
+    selectedList==='seguiment' ? 'Seguiment'
+    : isWatchedView ? `Informat per ${emailForUid(watchedOwnerId, watchedTasks.find(t=>t.ownerId===watchedOwnerId)?.ownerEmail)}`
+    : isAssignedToView ? `Assignades a ${emailForUid(assignedToUid, tasks.find(t=>t.assigneeId===assignedToUid)?.assigneeEmail)}`
+    : isAssignedByView ? `Assignades per ${emailForUid(assignedByUid, tasks.find(t=>t.ownerId===assignedByUid)?.ownerEmail)}`
+    : selectedLists.length===0 ? 'Totes les tasques'
+    : selectedLists.length===1 ? (lists.find(l=>l.id===selectedLists[0])?.name??'')
+    : `${selectedLists.length} llistes: ${lists.filter(l=>selectedLists.includes(l.id)).map(l=>l.name).join(', ')}`
+  ) + (!isPseudoList && selectedList!=='seguiment' && timeFilter!=='all' ? ` · ${TIME_FILTER_LABELS[timeFilter]}` : '');
 
   return (
     <>
@@ -1590,34 +1576,19 @@ function App() {
             </button>
           </div>
           <div className="sidebar-section">
-            <SidebarItem icon={Ic.inbox} label="Totes" count={tasks.filter(t=>t.status!=='completada').length}
-              active={!isMultiListMode&&selectedList==='all'} onClick={()=>{setSelectedList('all');setSelectedLists([]);setSidebarOpen(false)}}/>
-            <SidebarItem icon={Ic.today} label="Avui" count={countFor('today')}
-              active={!isMultiListMode&&selectedList==='today'} onClick={()=>{setSelectedList('today');setSelectedLists([]);setSidebarOpen(false)}}/>
-            <SidebarItem icon={Ic.calendar} label="Demà" count={countFor('tomorrow')}
-              active={!isMultiListMode&&selectedList==='tomorrow'} onClick={()=>{setSelectedList('tomorrow');setSelectedLists([]);setSidebarOpen(false)}}/>
-            <SidebarItem icon={Ic.calendar} label="Pròxims 3 dies" count={countFor('next3')}
-              active={!isMultiListMode&&selectedList==='next3'} onClick={()=>{setSelectedList('next3');setSelectedLists([]);setSidebarOpen(false)}}/>
-            <SidebarItem icon={Ic.calendar} label="Pròxims 7 dies" count={countFor('next7')}
-              active={!isMultiListMode&&selectedList==='next7'} onClick={()=>{setSelectedList('next7');setSelectedLists([]);setSidebarOpen(false)}}/>
             <SidebarItem icon={Ic.chart} label="Seguiment"
-              active={!isMultiListMode&&selectedList==='seguiment'} onClick={()=>{setSelectedList('seguiment');setSelectedLists([]);setSidebarOpen(false)}}/>
+              active={selectedList==='seguiment'} onClick={()=>{setSelectedList('seguiment');setSelectedLists([]);setSidebarOpen(false)}}/>
           </div>
           <div className="sidebar-section">
             <div className="sidebar-section-title" style={{display:'flex',alignItems:'center',gap:6}}>
               <span>Llistes</span>
-              {isMultiListMode && (
+              {selectedLists.length>0 && (
                 <span style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:6,textTransform:'none',letterSpacing:'normal',fontWeight:400}}>
                   <span className="badge">{selectedLists.length}</span>
                   <span style={{cursor:'pointer',textDecoration:'underline',fontSize:11}} onClick={()=>setSelectedLists([])}>Netejar</span>
                 </span>
               )}
             </div>
-            {isMultiListMode && (
-              <div style={{fontSize:10,color:'var(--text3)',padding:'0 8px 6px'}}>
-                Marca les caselles per veure diverses llistes alhora
-              </div>
-            )}
             {orderedGroups.length>1 && (
               <div className="group-chips">
                 <button className={`group-chip ${selectedGroup==='all'?'active':''}`} onClick={()=>setSelectedGroup('all')}>Tots</button>
@@ -1635,8 +1606,8 @@ function App() {
                   return (
                     <SidebarItem key={l.id} dot={l.color} label={l.name} count={countFor(l.id)}
                       sharedIcon={!isOwner?'recv':hasShares?'sent':null}
-                      active={isMultiListMode?selectedLists.includes(l.id):selectedList===l.id}
-                      onClick={()=>{setSelectedList(l.id);setSelectedLists([]);setSidebarOpen(false)}}
+                      active={selectedLists.includes(l.id)}
+                      onClick={()=>toggleSelectedList(l.id)}
                       checked={selectedLists.includes(l.id)} onCheck={()=>toggleSelectedList(l.id)}
                       onSettings={()=>setEditingList(l)} onDelete={isOwner?()=>deleteList(l.id):null}/>
                   );
@@ -1665,7 +1636,7 @@ function App() {
                 const count = watchedTasks.filter(t=>t.ownerId===ownerId&&t.status!=='completada').length;
                 return (
                   <SidebarItem key={ownerId} icon={Ic.eye} label={ownerEmail} count={count}
-                    active={!isMultiListMode&&selectedList===`watched:${ownerId}`}
+                    active={selectedList===`watched:${ownerId}`}
                     onClick={()=>{setSelectedList(`watched:${ownerId}`);setSelectedLists([]);setSidebarOpen(false)}}/>
                 );
               })}
@@ -1682,7 +1653,7 @@ function App() {
                   const count = assignedOutTasks.filter(t=>t.assigneeId===uid&&t.status!=='completada').length;
                   return (
                     <SidebarItem key={uid} icon={Ic.person} label={email} count={count}
-                      active={!isMultiListMode&&selectedList===`assignedTo:${uid}`}
+                      active={selectedList===`assignedTo:${uid}`}
                       onClick={()=>{setSelectedList(`assignedTo:${uid}`);setSelectedLists([]);setSidebarOpen(false)}}/>
                   );
                 })}
@@ -1700,7 +1671,7 @@ function App() {
                   const count = assignedToMeTasks.filter(t=>t.ownerId===uid&&t.status!=='completada').length;
                   return (
                     <SidebarItem key={uid} icon={Ic.person} label={email} count={count}
-                      active={!isMultiListMode&&selectedList===`assignedBy:${uid}`}
+                      active={selectedList===`assignedBy:${uid}`}
                       onClick={()=>{setSelectedList(`assignedBy:${uid}`);setSelectedLists([]);setSidebarOpen(false)}}/>
                   );
                 })}
@@ -1808,7 +1779,14 @@ function App() {
               })()}
             </div>
           ) : (<>
-            {view!=='gantt' && <div className="filters">
+            <div className="filters">
+              {view!=='gantt' && (<>
+                <span style={{fontSize:'11px',color:'var(--text3)'}}>Temps:</span>
+                {[['all','Totes'],['today','Avui'],['tomorrow','Demà'],['next3','Pròxims 3 dies'],['next7','Pròxims 7 dies']].map(([v,l])=>(
+                  <button key={v} className={`filter-chip ${timeFilter===v?'active':''}`} onClick={()=>setTimeFilter(v)}>{l}</button>
+                ))}
+                <span className="filter-sep">|</span>
+              </>)}
               <span style={{fontSize:'11px',color:'var(--text3)'}}>Estat:</span>
               {[['all','Totes'],['pendent','Pendent'],['en-curs','En curs'],['completada','Completada']].map(([v,l])=>(
                 <button key={v} className={`filter-chip ${filterStatus===v?'active':''}`} onClick={()=>setFilterStatus(v)}>{l}</button>
@@ -1867,12 +1845,9 @@ function App() {
                   </div>
                 </>
               )}
-            </div>}
+            </div>
             {view==='gantt' ? (
-              <GanttView tasks={tasks} lists={lists}
-                defaultList={isSpecificList?selectedList:'all'}
-                assignedFilter={isAssignedToView?{type:'to',uid:assignedToUid}:isAssignedByView?{type:'by',uid:assignedByUid}:null}
-                currentUserUid={user.uid} matchesSearch={matchesSearch}
+              <GanttView tasks={ganttTasks} lists={lists}
                 selectedTask={selectedTask} onSelectTask={setSelectedTask} onUpdateDates={updateTaskDates}/>
             ) : view==='calendar' ? (
               <CalendarView tasks={filtered} lists={lists} selectedTask={selectedTask} onSelectTask={setSelectedTask} onMoveTask={moveTaskToDate}
@@ -1886,10 +1861,10 @@ function App() {
               {pendents.length===0&&completades.length===0&&(
                 <div className="empty-state">{Ic.list}<p>Cap tasca. Crea-ne una amb <span className="kbd">n</span></p></div>
               )}
-              {(selectedList==='next3'||selectedList==='next7'?
+              {(timeFilter==='next3'||timeFilter==='next7'?
                 // Agrupa per dia concret (Avui / Demà / nom del dia), evitant l'etiqueta confusa "Pròxims 7 dies".
                 // Les tasques de diversos dies apareixen repetides a cada dia intermedi que travessin dins la finestra.
-                buildDayGroups(pendents, selectedList==='next3'?threeDayLaterStr:weekLaterStr)
+                buildDayGroups(pendents, timeFilter==='next3'?threeDayLaterStr:weekLaterStr)
                 :
                 // Les tasques de diversos dies apareixen repetides a cada bloc (Avui/Demà/Pròxims 7 dies/Més endavant)
                 // pel qual passi algun dels seus dies intermedis.
@@ -1949,7 +1924,7 @@ function App() {
       </div>
 
       {showModal&&<NewTaskModal lists={lists} defaultFields={defaultFields} contacts={contacts}
-        defaultList={(!DATE_QUICK_VIEWS.includes(selectedList)&&selectedList!=='all'&&selectedList!=='seguiment')?selectedList:(lists.find(l=>l.name==='Tasques')?.id||lists[0]?.id)}
+        defaultList={selectedLists.length===1?selectedLists[0]:(lists.find(l=>l.name==='Tasques')?.id||lists[0]?.id)}
         preFill={voicePreFill}
         onSave={addTask} onClose={()=>{setShowModal(false);setVoicePreFill(null);}}/>}
       {showListModal&&<NewListModal onSave={addList} onClose={()=>setShowListModal(false)} groups={presentGroups}/>}
@@ -3889,19 +3864,25 @@ function Heatmap({days, logs, color, period}) {
 }
 
 // ─── GANTT VIEW ───────────────────────────────────────────────────────────────
-function GanttView({tasks,lists,defaultList,assignedFilter,currentUserUid,matchesSearch,selectedTask,onSelectTask,onUpdateDates}) {
-  const DAY_W=24, DAYS=60, ROW_H=38, LABEL_W=210;
-  const [ganttList,setGanttList]=useState(defaultList||'all');
+function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdateDates}) {
+  const ROW_H=38, LABEL_W=210;
+  const [rangeMode,setRangeMode]=useState('total'); // 'week' | 'month' | 'total'
+  const DAY_W=24;
+  const DAYS = rangeMode==='week'?7:rangeMode==='month'?30:60;
   const [offset,setOffset]=useState(0);
+  const [showCompleted,setShowCompleted]=useState(false);
   const scrollRef=useRef(null);
   const dragRef=useRef(null);
   const draggedRef=useRef(false);
   const [dragPreview,setDragPreview]=useState(null); // {taskId, si, ei}
+  const changeRangeMode = mode => { setRangeMode(mode); setOffset(0); };
 
-  const winStart=(()=>{const d=new Date();d.setDate(d.getDate()-7+offset);return d;})();
+  // Mode 'total': finestra amb marge de -7 dies (com abans). Setmana/Mes: comença exactament avui.
+  const winStart=(()=>{const d=new Date();d.setDate(d.getDate()+(rangeMode==='total'?-7:0)+offset);return d;})();
   const winStartStr=ymd(winStart);
   const winEnd=new Date(winStart);winEnd.setDate(winEnd.getDate()+DAYS-1);
   const winEndStr=ymd(winEnd);
+  const stepSize = rangeMode==='week'?7:30;
 
   const days=[];
   for(let i=0;i<DAYS;i++){
@@ -3957,34 +3938,47 @@ function GanttView({tasks,lists,defaultList,assignedFilter,currentUserUid,matche
     window.addEventListener('pointercancel',finish);
   };
 
+  // Una tasca es "vigent" si avui cau entre inici i fi (ambdos inclosos), o "vençuda" si la data
+  // de fi ja ha passat i encara no esta completada. Aquestes son sempre les que es mostren al Gantt,
+  // independentment del rang (Setmana/Mes/Total) triat: el rang nomes decideix quants dies es veuen
+  // a l'eix horitzontal, no quines files hi surten.
+  const isVigentOrOverdue = t => {
+    const s=t.startDate||t.endDate, e=t.endDate||t.startDate;
+    if (!s||!e) return false;
+    if (s<=today&&e>=today) return true; // vigent
+    return e<today && t.status!=='completada'; // vençuda
+  };
+  const subtaskQualifies = s => {
+    const ss=s.start||s.due, se=s.due||s.start;
+    if (!ss||!se) return false;
+    if (ss<=today&&se>=today) return true; // vigent
+    return se<today && !s.done; // vençuda
+  };
   const visibleTasks=tasks.filter(t=>{
-    if (assignedFilter) {
-      if (assignedFilter.type==='to' && !(t.ownerId===currentUserUid && t.assigneeId===assignedFilter.uid)) return false;
-      if (assignedFilter.type==='by' && !(t.assigneeId===currentUserUid && t.ownerId===assignedFilter.uid)) return false;
-    } else if (ganttList!=='all'&&t.listId!==ganttList) return false;
-    if (matchesSearch&&!matchesSearch(t)) return false;
-    const s=t.startDate||t.endDate;const e=t.endDate||t.startDate;
-    return s&&e>=winStartStr&&s<=winEndStr;
+    const qualifyingSubtasks = (t.subtasks||[]).filter(subtaskQualifies);
+    const taskQualifies = isVigentOrOverdue(t);
+    if (!taskQualifies && qualifyingSubtasks.length===0) return false;
+    // Amaga tasques completades per defecte, tret que tinguin una subtasca pendent que si calgui mostrar,
+    // o que l'usuari hagi activat "Mostra completades".
+    if (t.status==='completada' && !showCompleted && qualifyingSubtasks.length===0) return false;
+    return true;
   }).sort((a,b)=>(a.startDate||a.endDate||'').localeCompare(b.startDate||b.endDate||''));
 
   const headerH=57; // month (28) + day (29)
   return (
     <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0}}>
       {/* Toolbar */}
-      <div style={{padding:'9px 16px',display:'flex',alignItems:'center',gap:8,borderBottom:'1px solid var(--border)',flexShrink:0}}>
-        {assignedFilter ? (
-          <span className="tag" style={{background:'rgba(79,142,247,.12)',color:'var(--accent)'}}>
-            {Ic.person} {assignedFilter.type==='to'?'Assignades a':'Assignades per'} — filtre actiu
-          </span>
-        ) : (
-          <select className="input" style={{width:175}} value={ganttList} onChange={e=>setGanttList(e.target.value)}>
-            <option value="all">Totes les llistes</option>
-            {lists.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
-          </select>
-        )}
-        <button className="btn btn-ghost" style={{padding:'5px 10px',fontSize:12}} onClick={()=>setOffset(o=>o-30)}>← Anterior</button>
+      <div style={{padding:'9px 16px',display:'flex',alignItems:'center',gap:8,borderBottom:'1px solid var(--border)',flexShrink:0,flexWrap:'wrap'}}>
+        <div className="view-toggle">
+          <button className={`view-btn ${rangeMode==='week'?'active':''}`} onClick={()=>changeRangeMode('week')}>Setmana</button>
+          <button className={`view-btn ${rangeMode==='month'?'active':''}`} onClick={()=>changeRangeMode('month')}>Mes</button>
+          <button className={`view-btn ${rangeMode==='total'?'active':''}`} onClick={()=>changeRangeMode('total')}>Total</button>
+        </div>
+        <button className="btn btn-ghost" style={{padding:'5px 10px',fontSize:12}} onClick={()=>setOffset(o=>o-stepSize)}>← Anterior</button>
         <button className="btn btn-ghost" style={{padding:'5px 10px',fontSize:12}} onClick={()=>setOffset(0)}>Avui</button>
-        <button className="btn btn-ghost" style={{padding:'5px 10px',fontSize:12}} onClick={()=>setOffset(o=>o+30)}>Següent →</button>
+        <button className="btn btn-ghost" style={{padding:'5px 10px',fontSize:12}} onClick={()=>setOffset(o=>o+stepSize)}>Següent →</button>
+        <button className={`btn ${showCompleted?'btn-primary':'btn-ghost'}`} style={{padding:'5px 10px',fontSize:12}}
+          onClick={()=>setShowCompleted(s=>!s)}>{showCompleted?'Amaga completades':'Mostra completades'}</button>
         <span style={{marginLeft:'auto',fontSize:11,color:'var(--text3)'}}>{visibleTasks.length} tasques</span>
       </div>
 
@@ -4037,7 +4031,7 @@ function GanttView({tasks,lists,defaultList,assignedFilter,currentUserUid,matche
             // Aplana tasques + subtasques (indentades sota la seva tasca, nomes les que tenen data).
             const flatRows = visibleTasks.flatMap(t => [
               {type:'task', t},
-              ...(t.subtasks||[]).filter(s=>s.due||s.start).map(s=>({type:'subtask', t, s})),
+              ...(t.subtasks||[]).filter(subtaskQualifies).map(s=>({type:'subtask', t, s})),
             ]);
             return flatRows.map((row,ri)=>{
               if (row.type==='subtask') {
