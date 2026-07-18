@@ -856,6 +856,7 @@ function App() {
   const [toast,setToast]             = useState('');
   const showToast = msg => { setToast(msg); setTimeout(()=>setToast(''),3000); };
   const [selectedList,setSelectedList]   = useState('all');
+  const [selectedLists,setSelectedLists] = useState([]); // seleccio de diverses llistes alhora (checkboxes a la barra lateral)
   const [selectedGroup,setSelectedGroup] = useState('all');
   const [selectedTask,setSelectedTask]   = useState(null);
   const [filterStatus,setFilterStatus]   = useState('all');
@@ -919,7 +920,7 @@ function App() {
     setUser(u??null);
     if(u) db.collection('users').doc(u.uid).set({email:u.email},{merge:true});
   }),[]);
-  useEffect(()=>{setFilterCustom({});setShowMoreFilters(false);},[selectedList]);
+  useEffect(()=>{setFilterCustom({});setShowMoreFilters(false);},[selectedList,selectedLists]);
   const moreFiltersRef = useRef(null);
   useEffect(()=>{
     if (!showMoreFilters) return;
@@ -1425,8 +1426,10 @@ function App() {
   const assignedToUid = isAssignedToView ? selectedList.slice(11) : null;
   const assignedByUid = isAssignedByView ? selectedList.slice(11) : null;
   const isPseudoList = isWatchedView || isAssignedToView || isAssignedByView;
+  // Mode "diverses llistes alhora" (checkboxes a la barra lateral), independent del selectedList habitual
+  const isMultiListMode = selectedLists.length>0;
   // Camps personalitzats de la llista seleccionada que es poden filtrar (select/checkbox)
-  const isSpecificList = !DATE_QUICK_VIEWS.includes(selectedList)&&selectedList!=='all'&&selectedList!=='seguiment'&&!isPseudoList;
+  const isSpecificList = !isMultiListMode && !DATE_QUICK_VIEWS.includes(selectedList)&&selectedList!=='all'&&selectedList!=='seguiment'&&!isPseudoList;
   const customFilterFields = isSpecificList
     ? (lists.find(l=>l.id===selectedList)?.fields||[]).filter(f=>f.type==='select'||f.type==='checkbox')
     : [];
@@ -1436,8 +1439,14 @@ function App() {
   const listGroupOf = listId => lists.find(l=>l.id===listId)?.group || 'Sense grup';
   const presentGroups = [...new Set(lists.map(l=>l.group||'Sense grup'))];
   const orderedGroups = [...LIST_GROUPS.filter(g=>presentGroups.includes(g)), ...presentGroups.filter(g=>!LIST_GROUPS.includes(g))];
-  // El filtre de grup només s'aplica a vistes generals (Totes, Avui, Demà...), no quan ja s'ha triat una llista concreta
-  const matchesGroup = t => isSpecificList || selectedGroup==='all' || listGroupOf(t.listId)===selectedGroup;
+  // El filtre de grup només s'aplica a vistes generals (Totes, Avui, Demà...), no quan ja s'ha triat una llista concreta (o diverses)
+  const matchesGroup = t => isSpecificList || isMultiListMode || selectedGroup==='all' || listGroupOf(t.listId)===selectedGroup;
+  const toggleSelectedList = id => {
+    // Si veniem d'una vista especial (Seguiment/Informat per/Assignades), en sortim en marcar caselles
+    // perque la seleccio de diverses llistes es mostri amb el renderitzat normal (filtered/pendents/completades).
+    if (selectedList==='seguiment' || isPseudoList) setSelectedList('all');
+    setSelectedLists(ls=>ls.includes(id)?ls.filter(x=>x!==id):[...ls,id]);
+  };
   // Per a les vistes "Pròxims 3/7 dies": la tasca hi entra si algun dia del seu rang [inici,fi] cau dins
   // la finestra [avui, maxStr], no només si el seu dia de venciment hi cau (així una tasca de diversos dies
   // que comença dins la finestra però acaba més tard també hi apareix, als dies intermedis que li toquin).
@@ -1448,7 +1457,10 @@ function App() {
     return s<=maxStr && e>=today;
   };
   const filtered = tasks.filter(t=>{
-    if (selectedList==='today'){
+    if (isMultiListMode) {
+      if (!selectedLists.includes(t.listId)) return false;
+    }
+    else if (selectedList==='today'){
       // Per a ocurrències de tasques repetides, només compta la data de l'ocurrència (endDate),
       // ja que totes comparteixen la mateixa startDate original.
       if (t.seriesId) { if (t.endDate!==today) return false; }
@@ -1516,7 +1528,9 @@ function App() {
   // Resolt l'email d'un uid: primer l'ownerEmail guardat a la tasca (tasques noves),
   // si no, el cerca al directori d'usuaris (tasques antigues sense ownerEmail); si tampoc, l'uid en cru.
   const emailForUid = (uid, knownEmail) => knownEmail || allUsers.find(u=>u.uid===uid)?.email || uid;
-  const listName = selectedList==='all'?'Totes les tasques'
+  const listName = isMultiListMode
+    ? `${selectedLists.length} llistes: ${lists.filter(l=>selectedLists.includes(l.id)).map(l=>l.name).join(', ')}`
+    : selectedList==='all'?'Totes les tasques'
     :selectedList==='today'?'Avui'
     :selectedList==='tomorrow'?'Demà'
     :selectedList==='next3'?'Pròxims 3 dies'
@@ -1577,20 +1591,33 @@ function App() {
           </div>
           <div className="sidebar-section">
             <SidebarItem icon={Ic.inbox} label="Totes" count={tasks.filter(t=>t.status!=='completada').length}
-              active={selectedList==='all'} onClick={()=>{setSelectedList('all');setSidebarOpen(false)}}/>
+              active={!isMultiListMode&&selectedList==='all'} onClick={()=>{setSelectedList('all');setSelectedLists([]);setSidebarOpen(false)}}/>
             <SidebarItem icon={Ic.today} label="Avui" count={countFor('today')}
-              active={selectedList==='today'} onClick={()=>{setSelectedList('today');setSidebarOpen(false)}}/>
+              active={!isMultiListMode&&selectedList==='today'} onClick={()=>{setSelectedList('today');setSelectedLists([]);setSidebarOpen(false)}}/>
             <SidebarItem icon={Ic.calendar} label="Demà" count={countFor('tomorrow')}
-              active={selectedList==='tomorrow'} onClick={()=>{setSelectedList('tomorrow');setSidebarOpen(false)}}/>
+              active={!isMultiListMode&&selectedList==='tomorrow'} onClick={()=>{setSelectedList('tomorrow');setSelectedLists([]);setSidebarOpen(false)}}/>
             <SidebarItem icon={Ic.calendar} label="Pròxims 3 dies" count={countFor('next3')}
-              active={selectedList==='next3'} onClick={()=>{setSelectedList('next3');setSidebarOpen(false)}}/>
+              active={!isMultiListMode&&selectedList==='next3'} onClick={()=>{setSelectedList('next3');setSelectedLists([]);setSidebarOpen(false)}}/>
             <SidebarItem icon={Ic.calendar} label="Pròxims 7 dies" count={countFor('next7')}
-              active={selectedList==='next7'} onClick={()=>{setSelectedList('next7');setSidebarOpen(false)}}/>
+              active={!isMultiListMode&&selectedList==='next7'} onClick={()=>{setSelectedList('next7');setSelectedLists([]);setSidebarOpen(false)}}/>
             <SidebarItem icon={Ic.chart} label="Seguiment"
-              active={selectedList==='seguiment'} onClick={()=>{setSelectedList('seguiment');setSidebarOpen(false)}}/>
+              active={!isMultiListMode&&selectedList==='seguiment'} onClick={()=>{setSelectedList('seguiment');setSelectedLists([]);setSidebarOpen(false)}}/>
           </div>
           <div className="sidebar-section">
-            <div className="sidebar-section-title">Llistes</div>
+            <div className="sidebar-section-title" style={{display:'flex',alignItems:'center',gap:6}}>
+              <span>Llistes</span>
+              {isMultiListMode && (
+                <span style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:6,textTransform:'none',letterSpacing:'normal',fontWeight:400}}>
+                  <span className="badge">{selectedLists.length}</span>
+                  <span style={{cursor:'pointer',textDecoration:'underline',fontSize:11}} onClick={()=>setSelectedLists([])}>Netejar</span>
+                </span>
+              )}
+            </div>
+            {isMultiListMode && (
+              <div style={{fontSize:10,color:'var(--text3)',padding:'0 8px 6px'}}>
+                Marca les caselles per veure diverses llistes alhora
+              </div>
+            )}
             {orderedGroups.length>1 && (
               <div className="group-chips">
                 <button className={`group-chip ${selectedGroup==='all'?'active':''}`} onClick={()=>setSelectedGroup('all')}>Tots</button>
@@ -1608,7 +1635,9 @@ function App() {
                   return (
                     <SidebarItem key={l.id} dot={l.color} label={l.name} count={countFor(l.id)}
                       sharedIcon={!isOwner?'recv':hasShares?'sent':null}
-                      active={selectedList===l.id} onClick={()=>{setSelectedList(l.id);setSidebarOpen(false)}}
+                      active={isMultiListMode?selectedLists.includes(l.id):selectedList===l.id}
+                      onClick={()=>{setSelectedList(l.id);setSelectedLists([]);setSidebarOpen(false)}}
+                      checked={selectedLists.includes(l.id)} onCheck={()=>toggleSelectedList(l.id)}
                       onSettings={()=>setEditingList(l)} onDelete={isOwner?()=>deleteList(l.id):null}/>
                   );
                 })}
@@ -1636,8 +1665,8 @@ function App() {
                 const count = watchedTasks.filter(t=>t.ownerId===ownerId&&t.status!=='completada').length;
                 return (
                   <SidebarItem key={ownerId} icon={Ic.eye} label={ownerEmail} count={count}
-                    active={selectedList===`watched:${ownerId}`}
-                    onClick={()=>{setSelectedList(`watched:${ownerId}`);setSidebarOpen(false)}}/>
+                    active={!isMultiListMode&&selectedList===`watched:${ownerId}`}
+                    onClick={()=>{setSelectedList(`watched:${ownerId}`);setSelectedLists([]);setSidebarOpen(false)}}/>
                 );
               })}
             </div>
@@ -1653,8 +1682,8 @@ function App() {
                   const count = assignedOutTasks.filter(t=>t.assigneeId===uid&&t.status!=='completada').length;
                   return (
                     <SidebarItem key={uid} icon={Ic.person} label={email} count={count}
-                      active={selectedList===`assignedTo:${uid}`}
-                      onClick={()=>{setSelectedList(`assignedTo:${uid}`);setSidebarOpen(false)}}/>
+                      active={!isMultiListMode&&selectedList===`assignedTo:${uid}`}
+                      onClick={()=>{setSelectedList(`assignedTo:${uid}`);setSelectedLists([]);setSidebarOpen(false)}}/>
                   );
                 })}
               </div>
@@ -1671,8 +1700,8 @@ function App() {
                   const count = assignedToMeTasks.filter(t=>t.ownerId===uid&&t.status!=='completada').length;
                   return (
                     <SidebarItem key={uid} icon={Ic.person} label={email} count={count}
-                      active={selectedList===`assignedBy:${uid}`}
-                      onClick={()=>{setSelectedList(`assignedBy:${uid}`);setSidebarOpen(false)}}/>
+                      active={!isMultiListMode&&selectedList===`assignedBy:${uid}`}
+                      onClick={()=>{setSelectedList(`assignedBy:${uid}`);setSelectedLists([]);setSidebarOpen(false)}}/>
                   );
                 })}
               </div>
@@ -1937,11 +1966,15 @@ function App() {
 }
 
 // ─── SIDEBAR ITEM ─────────────────────────────────────────────────────────────
-function SidebarItem({icon,dot,label,count,active,onClick,onSettings,onDelete,sharedIcon}) {
+function SidebarItem({icon,dot,label,count,active,onClick,onSettings,onDelete,sharedIcon,checked,onCheck}) {
   const [hover,setHover] = useState(false);
   return (
     <div className={`sidebar-item ${active?'active':''}`} onClick={onClick}
       onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)}>
+      {onCheck&&(
+        <input type="checkbox" checked={!!checked} onClick={e=>e.stopPropagation()} onChange={e=>{e.stopPropagation();onCheck();}}
+          style={{width:13,height:13,flexShrink:0,cursor:'pointer'}} title="Selecciona diverses llistes"/>
+      )}
       {icon&&<span style={{width:14,height:14,flexShrink:0}}>{icon}</span>}
       {dot&&<span className="sidebar-dot" style={{background:dot}}/>}
       <span style={{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{label}</span>
@@ -2079,7 +2112,7 @@ function SubtasksView({tasks,lists,selectedTask,onSelectTask,onUpdateTask}) {
       <div className="task-body">
         <div className="task-title">{s.title}</div>
         <div className="task-meta">
-          <span style={{fontSize:11,color:'var(--text3)'}}>{s.task.title} · {listName(s.task.listId)}</span>
+          <span style={{fontSize:11,color:'var(--text3)'}}>{s.task.title} · <strong style={{fontWeight:700,color:'var(--text2)'}}>{listName(s.task.listId)}</strong></span>
           {s.due && (()=>{
             const cat = dateCategoryForDay(s.due);
             const cfg = DATE_GROUPS.find(g=>g.key===cat);
@@ -4000,68 +4033,118 @@ function GanttView({tasks,lists,defaultList,assignedFilter,currentUserUid,matche
               <div style={{width:LABEL_W,minWidth:LABEL_W,flexShrink:0,position:'sticky',left:0,background:'var(--bg)',zIndex:3,borderRight:'1px solid var(--border)'}}/>
               <div className="empty-state" style={{flex:1,padding:'50px 20px'}}>{Ic.calendar}<p>Cap tasca amb dates en aquest període.</p></div>
             </div>
-          ) : visibleTasks.map((t,ti)=>{
-            const list=lists.find(l=>l.id===t.listId);
-            const color=list?.color||'#4f8ef7';
-            const s=t.startDate||t.endDate;
-            const e=t.endDate||t.startDate;
-            const si=dayIdx(s),ei=dayIdx(e);
-            const previewing=dragPreview&&dragPreview.taskId===t.id;
-            const dsi=previewing?dragPreview.si:si;
-            const dei=previewing?dragPreview.ei:ei;
-            const barLeft=Math.max(0,dsi)*DAY_W+2;
-            const barW=Math.max(DAY_W-4,(Math.min(DAYS-1,dei)-Math.max(0,dsi)+1)*DAY_W-4);
-            const isSelected=selectedTask?.id===t.id;
-            const isDone=t.status==='completada';
-            return (
-              <div key={t.id} style={{display:'flex',height:ROW_H,borderBottom:'1px solid var(--border)',cursor:'pointer'}}
-                onClick={()=>{if(draggedRef.current)return;onSelectTask(t===selectedTask?null:t);}}>
-                {/* Label */}
-                <div style={{
-                  width:LABEL_W,minWidth:LABEL_W,flexShrink:0,display:'flex',alignItems:'center',gap:7,padding:'0 10px',
-                  position:'sticky',left:0,zIndex:3,
-                  background:isSelected?'rgba(79,142,247,.15)':list?hexToRgba(color,.10):'var(--bg)',
-                  borderRight:'1px solid var(--border)',overflow:'hidden',transition:'background .1s'
-                }}>
-                  <span style={{width:7,height:7,borderRadius:'50%',background:color,flexShrink:0}}/>
-                  <span style={{fontSize:12,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',opacity:isDone?.45:1,fontWeight:700}}>{t.title}</span>
-                </div>
-                {/* Timeline */}
-                <div style={{flex:1,position:'relative',background:ti%2===0?'transparent':'rgba(0,0,0,.013)'}}>
-                  {/* Weekend cols */}
-                  {days.map((day,di)=>day.isWeekend?(
-                    <div key={di} style={{position:'absolute',top:0,left:di*DAY_W,width:DAY_W,height:'100%',background:'var(--bg2)',opacity:.45,pointerEvents:'none'}}/>
-                  ):null)}
-                  {/* Today line */}
-                  {todayIdx>=0&&(
-                    <div style={{position:'absolute',top:0,left:todayIdx*DAY_W+DAY_W/2-1,width:2,height:'100%',background:'var(--accent)',opacity:.3,pointerEvents:'none'}}/>
-                  )}
-                  {/* Bar */}
-                  {dsi<=DAYS-1&&dei>=0&&(
-                    <div title="Arrossega per moure · arrossega les vores per canviar l'inici o el final"
-                      onPointerDown={e=>startBarDrag(e,t,'move',si,ei)}
-                      style={{
-                      position:'absolute',left:barLeft,top:7,width:barW,height:24,
-                      background:isDone?'var(--bg3)':hexToRgba(color,.82),
-                      borderRadius:5,border:`1.5px solid ${isDone?'var(--border)':color}`,
-                      display:'flex',alignItems:'center',padding:'0 7px',overflow:'hidden',
-                      opacity:isDone?.45:1,
-                      boxShadow:isSelected?`0 0 0 2px ${color}`:(previewing?`0 0 0 2px ${color}`:undefined),
-                      transition:'box-shadow .1s',cursor:'grab',touchAction:'none',userSelect:'none'
+          ) : (() => {
+            // Aplana tasques + subtasques (indentades sota la seva tasca, nomes les que tenen data).
+            const flatRows = visibleTasks.flatMap(t => [
+              {type:'task', t},
+              ...(t.subtasks||[]).filter(s=>s.due||s.start).map(s=>({type:'subtask', t, s})),
+            ]);
+            return flatRows.map((row,ri)=>{
+              if (row.type==='subtask') {
+                const {t,s} = row;
+                const list=lists.find(l=>l.id===t.listId);
+                const color=list?.color||'#4f8ef7';
+                const ss=s.start||s.due, se=s.due||s.start;
+                const si=dayIdx(ss),ei=dayIdx(se);
+                const barLeft=Math.max(0,si)*DAY_W+2;
+                const barW=Math.max(DAY_W-4,(Math.min(DAYS-1,ei)-Math.max(0,si)+1)*DAY_W-4);
+                return (
+                  <div key={t.id+'-sub-'+s.id} style={{display:'flex',height:30,borderBottom:'1px solid var(--border)',cursor:'pointer'}}
+                    onClick={()=>{if(draggedRef.current)return;onSelectTask(t===selectedTask?null:t);}}>
+                    {/* Label indentat */}
+                    <div style={{
+                      width:LABEL_W,minWidth:LABEL_W,flexShrink:0,display:'flex',alignItems:'center',gap:6,padding:'0 10px 0 30px',
+                      position:'sticky',left:0,zIndex:3,background:'var(--bg)',borderRight:'1px solid var(--border)',overflow:'hidden'
                     }}>
-                      <div onPointerDown={e=>startBarDrag(e,t,'start',si,ei)} title="Canvia la data d'inici"
-                        style={{position:'absolute',left:0,top:0,width:9,height:'100%',cursor:'ew-resize',touchAction:'none'}}/>
-                      <div onPointerDown={e=>startBarDrag(e,t,'end',si,ei)} title="Canvia la data final"
-                        style={{position:'absolute',right:0,top:0,width:9,height:'100%',cursor:'ew-resize',touchAction:'none'}}/>
-                      {barW>55&&<span style={{fontSize:10,fontWeight:500,color:'white',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',textShadow:'0 1px 3px rgba(0,0,0,.45)',pointerEvents:'none'}}>
-                        {t.title}
-                      </span>}
+                      <span style={{width:5,height:5,borderRadius:'50%',background:color,flexShrink:0,opacity:.6}}/>
+                      <span style={{fontSize:11,color:'var(--text3)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',textDecoration:s.done?'line-through':'none',opacity:s.done?.5:1}}>
+                        {s.title}
+                      </span>
                     </div>
-                  )}
+                    {/* Timeline */}
+                    <div style={{flex:1,position:'relative'}}>
+                      {days.map((day,di)=>day.isWeekend?(
+                        <div key={di} style={{position:'absolute',top:0,left:di*DAY_W,width:DAY_W,height:'100%',background:'var(--bg2)',opacity:.45,pointerEvents:'none'}}/>
+                      ):null)}
+                      {todayIdx>=0&&(
+                        <div style={{position:'absolute',top:0,left:todayIdx*DAY_W+DAY_W/2-1,width:2,height:'100%',background:'var(--accent)',opacity:.3,pointerEvents:'none'}}/>
+                      )}
+                      {si<=DAYS-1&&ei>=0&&(
+                        <div title={`${s.title} (${fmtList(ss)}${se!==ss?' → '+fmtList(se):''})`}
+                          style={{
+                            position:'absolute',left:barLeft,top:8,width:barW,height:14,
+                            background:s.done?'var(--bg3)':hexToRgba(color,.5),
+                            borderRadius:4,border:`1px solid ${s.done?'var(--border)':color}`,
+                            opacity:s.done?.4:1,pointerEvents:'none'
+                          }}/>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+              const t = row.t;
+              const list=lists.find(l=>l.id===t.listId);
+              const color=list?.color||'#4f8ef7';
+              const s=t.startDate||t.endDate;
+              const e=t.endDate||t.startDate;
+              const si=dayIdx(s),ei=dayIdx(e);
+              const previewing=dragPreview&&dragPreview.taskId===t.id;
+              const dsi=previewing?dragPreview.si:si;
+              const dei=previewing?dragPreview.ei:ei;
+              const barLeft=Math.max(0,dsi)*DAY_W+2;
+              const barW=Math.max(DAY_W-4,(Math.min(DAYS-1,dei)-Math.max(0,dsi)+1)*DAY_W-4);
+              const isSelected=selectedTask?.id===t.id;
+              const isDone=t.status==='completada';
+              return (
+                <div key={t.id} style={{display:'flex',height:ROW_H,borderBottom:'1px solid var(--border)',cursor:'pointer'}}
+                  onClick={()=>{if(draggedRef.current)return;onSelectTask(t===selectedTask?null:t);}}>
+                  {/* Label */}
+                  <div style={{
+                    width:LABEL_W,minWidth:LABEL_W,flexShrink:0,display:'flex',alignItems:'center',gap:7,padding:'0 10px',
+                    position:'sticky',left:0,zIndex:3,
+                    background:isSelected?'rgba(79,142,247,.15)':list?hexToRgba(color,.10):'var(--bg)',
+                    borderRight:'1px solid var(--border)',overflow:'hidden',transition:'background .1s'
+                  }}>
+                    <span style={{width:7,height:7,borderRadius:'50%',background:color,flexShrink:0}}/>
+                    <span style={{fontSize:12,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',opacity:isDone?.45:1,fontWeight:700}}>{t.title}</span>
+                  </div>
+                  {/* Timeline */}
+                  <div style={{flex:1,position:'relative',background:ri%2===0?'transparent':'rgba(0,0,0,.013)'}}>
+                    {/* Weekend cols */}
+                    {days.map((day,di)=>day.isWeekend?(
+                      <div key={di} style={{position:'absolute',top:0,left:di*DAY_W,width:DAY_W,height:'100%',background:'var(--bg2)',opacity:.45,pointerEvents:'none'}}/>
+                    ):null)}
+                    {/* Today line */}
+                    {todayIdx>=0&&(
+                      <div style={{position:'absolute',top:0,left:todayIdx*DAY_W+DAY_W/2-1,width:2,height:'100%',background:'var(--accent)',opacity:.3,pointerEvents:'none'}}/>
+                    )}
+                    {/* Bar */}
+                    {dsi<=DAYS-1&&dei>=0&&(
+                      <div title="Arrossega per moure · arrossega les vores per canviar l'inici o el final"
+                        onPointerDown={e=>startBarDrag(e,t,'move',si,ei)}
+                        style={{
+                        position:'absolute',left:barLeft,top:7,width:barW,height:24,
+                        background:isDone?'var(--bg3)':hexToRgba(color,.82),
+                        borderRadius:5,border:`1.5px solid ${isDone?'var(--border)':color}`,
+                        display:'flex',alignItems:'center',padding:'0 7px',overflow:'hidden',
+                        opacity:isDone?.45:1,
+                        boxShadow:isSelected?`0 0 0 2px ${color}`:(previewing?`0 0 0 2px ${color}`:undefined),
+                        transition:'box-shadow .1s',cursor:'grab',touchAction:'none',userSelect:'none'
+                      }}>
+                        <div onPointerDown={e=>startBarDrag(e,t,'start',si,ei)} title="Canvia la data d'inici"
+                          style={{position:'absolute',left:0,top:0,width:9,height:'100%',cursor:'ew-resize',touchAction:'none'}}/>
+                        <div onPointerDown={e=>startBarDrag(e,t,'end',si,ei)} title="Canvia la data final"
+                          style={{position:'absolute',right:0,top:0,width:9,height:'100%',cursor:'ew-resize',touchAction:'none'}}/>
+                        {barW>55&&<span style={{fontSize:10,fontWeight:500,color:'white',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',textShadow:'0 1px 3px rgba(0,0,0,.45)',pointerEvents:'none'}}>
+                          {t.title}
+                        </span>}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            });
+          })()}
         </div>
       </div>
     </div>
