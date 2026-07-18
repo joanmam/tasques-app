@@ -4042,6 +4042,7 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
                 const si=dayIdx(ss),ei=dayIdx(se);
                 const barLeft=Math.max(0,si)*DAY_W+2;
                 const barW=Math.max(DAY_W-4,(Math.min(DAYS-1,ei)-Math.max(0,si)+1)*DAY_W-4);
+                const subOverdue=!s.done&&se&&se<today;
                 return (
                   <div key={t.id+'-sub-'+s.id} style={{display:'flex',height:30,borderBottom:'1px solid var(--border)',cursor:'pointer'}}
                     onClick={()=>{if(draggedRef.current)return;onSelectTask(t===selectedTask?null:t);}}>
@@ -4051,8 +4052,8 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
                       position:'sticky',left:0,zIndex:3,background:'var(--bg)',borderRight:'1px solid var(--border)',overflow:'hidden'
                     }}>
                       <span style={{width:5,height:5,borderRadius:'50%',background:color,flexShrink:0,opacity:.6}}/>
-                      <span style={{fontSize:11,color:'var(--text3)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',textDecoration:s.done?'line-through':'none',opacity:s.done?.5:1}}>
-                        {s.title}
+                      <span style={{fontSize:11,color:subOverdue?'var(--danger)':'var(--text3)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',textDecoration:s.done?'line-through':'none',opacity:s.done?.5:1}}>
+                        {subOverdue?'⚠ ':''}{s.title}
                       </span>
                     </div>
                     {/* Timeline */}
@@ -4064,11 +4065,11 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
                         <div style={{position:'absolute',top:0,left:todayIdx*DAY_W+DAY_W/2-1,width:2,height:'100%',background:'var(--accent)',opacity:.3,pointerEvents:'none'}}/>
                       )}
                       {si<=DAYS-1&&ei>=0&&(
-                        <div title={`${s.title} (${fmtList(ss)}${se!==ss?' → '+fmtList(se):''})`}
+                        <div title={`${subOverdue?'⚠ ':''}${s.title} (${fmtList(ss)}${se!==ss?' → '+fmtList(se):''})`}
                           style={{
                             position:'absolute',left:barLeft,top:8,width:barW,height:14,
-                            background:s.done?'var(--bg3)':hexToRgba(color,.5),
-                            borderRadius:4,border:`1px solid ${s.done?'var(--border)':color}`,
+                            background:s.done?'var(--bg3)':subOverdue?'var(--danger)':hexToRgba(color,.5),
+                            borderRadius:4,border:`1px solid ${s.done?'var(--border)':subOverdue?'var(--danger)':color}`,
                             opacity:s.done?.4:1,pointerEvents:'none'
                           }}/>
                       )}
@@ -4089,6 +4090,7 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
               const barW=Math.max(DAY_W-4,(Math.min(DAYS-1,dei)-Math.max(0,dsi)+1)*DAY_W-4);
               const isSelected=selectedTask?.id===t.id;
               const isDone=t.status==='completada';
+              const overdue=!isDone&&e&&e<today;
               return (
                 <div key={t.id} style={{display:'flex',height:ROW_H,borderBottom:'1px solid var(--border)',cursor:'pointer'}}
                   onClick={()=>{if(draggedRef.current)return;onSelectTask(t===selectedTask?null:t);}}>
@@ -4100,7 +4102,9 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
                     borderRight:'1px solid var(--border)',overflow:'hidden',transition:'background .1s'
                   }}>
                     <span style={{width:7,height:7,borderRadius:'50%',background:color,flexShrink:0}}/>
-                    <span style={{fontSize:12,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',opacity:isDone?.45:1,fontWeight:700}}>{t.title}</span>
+                    <span style={{fontSize:12,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',opacity:isDone?.45:1,fontWeight:700,color:overdue?'var(--danger)':undefined}}>
+                      {overdue?'⚠ ':''}{t.title}
+                    </span>
                   </div>
                   {/* Timeline */}
                   <div style={{flex:1,position:'relative',background:ri%2===0?'transparent':'rgba(0,0,0,.013)'}}>
@@ -4118,8 +4122,8 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
                         onPointerDown={e=>startBarDrag(e,t,'move',si,ei)}
                         style={{
                         position:'absolute',left:barLeft,top:7,width:barW,height:24,
-                        background:isDone?'var(--bg3)':hexToRgba(color,.82),
-                        borderRadius:5,border:`1.5px solid ${isDone?'var(--border)':color}`,
+                        background:isDone?'var(--bg3)':overdue?'var(--danger)':hexToRgba(color,.82),
+                        borderRadius:5,border:`1.5px solid ${isDone?'var(--border)':overdue?'var(--danger)':color}`,
                         display:'flex',alignItems:'center',padding:'0 7px',overflow:'hidden',
                         opacity:isDone?.45:1,
                         boxShadow:isSelected?`0 0 0 2px ${color}`:(previewing?`0 0 0 2px ${color}`:undefined),
@@ -4130,7 +4134,7 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
                         <div onPointerDown={e=>startBarDrag(e,t,'end',si,ei)} title="Canvia la data final"
                           style={{position:'absolute',right:0,top:0,width:9,height:'100%',cursor:'ew-resize',touchAction:'none'}}/>
                         {barW>55&&<span style={{fontSize:10,fontWeight:500,color:'white',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',textShadow:'0 1px 3px rgba(0,0,0,.45)',pointerEvents:'none'}}>
-                          {t.title}
+                          {overdue?'⚠ ':''}{t.title}
                         </span>}
                       </div>
                     )}
