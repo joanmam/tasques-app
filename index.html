@@ -3946,15 +3946,19 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
     window.addEventListener('pointercancel',finish);
   };
 
+  // Una ocurrència d'una sèrie recurrent nomes te sentit amb la seva propia endDate (la startDate es
+  // la de tota la sèrie, compartida per totes les ocurrències, i no representa aquesta ocurrència
+  // concreta) — mateix criteri que ja fan servir taskDueStr/sortDateStr/isRange a la resta de l'app.
+  const taskRange = t => t.seriesId ? {s:t.endDate, e:t.endDate} : {s:t.startDate||t.endDate, e:t.endDate||t.startDate};
   // Gantt "normal": es mostra tota tasca/subtasca la data de la qual intersecti amb la finestra
   // visible (com sempre), MES les vençudes (data de fi ja passada i encara no completada), que es
   // veuen sempre encara que quedin fora de la finestra.
   const inWindowTask = t => {
-    const s=t.startDate||t.endDate, e=t.endDate||t.startDate;
+    const {s,e} = taskRange(t);
     return !!s && !!e && e>=winStartStr && s<=winEndStr;
   };
   const isTaskOverdue = t => {
-    const e=t.endDate||t.startDate;
+    const {e} = taskRange(t);
     return !!e && e<today && t.status!=='completada';
   };
   const inWindowSubtask = s => {
@@ -3974,7 +3978,7 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
     // o que l'usuari hagi activat "Mostra completades".
     if (t.status==='completada' && !showCompleted && qualifyingSubtasks.length===0) return false;
     return true;
-  }).sort((a,b)=>(a.startDate||a.endDate||'').localeCompare(b.startDate||b.endDate||''));
+  }).sort((a,b)=>(taskRange(a).s||'').localeCompare(taskRange(b).s||''));
 
   const headerH=57; // month (28) + day (29)
   return (
@@ -4091,8 +4095,7 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
               const t = row.t;
               const list=lists.find(l=>l.id===t.listId);
               const color=list?.color||'#4f8ef7';
-              const s=t.startDate||t.endDate;
-              const e=t.endDate||t.startDate;
+              const {s,e} = taskRange(t);
               const si=dayIdx(s),ei=dayIdx(e);
               const previewing=dragPreview&&dragPreview.taskId===t.id;
               const dsi=previewing?dragPreview.si:si;
