@@ -11,6 +11,11 @@ on:
   schedule:
     - cron: '30 4 * * *'
   workflow_dispatch:
+    inputs:
+      only_email:
+        description: 'Nomes enviar el resum a aquest email (proves). Buit = a tothom.'
+        required: false
+        default: ''
 
 jobs:
   send:
@@ -26,4 +31,5 @@ jobs:
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          ONLY_EMAIL: ${{ github.event.inputs.only_email }}
         run: python scripts/daily_digest.py
