@@ -1,0 +1,29 @@
+name: Resum diari de tasques
+
+# S'ha de disparar cada dia a les 6:00 (hora de Madrid) via un cron extern
+# (cron-job.org, com el de reminders.yml) que crida workflow_dispatch amb
+# la timezone Europe/Madrid — així cron-job.org ja gestiona el canvi
+# d'horari d'estiu/hivern sense haver de tocar aquest fitxer.
+# El schedule de sota es nomes una copia de seguretat (04:30 UTC ~ 06:30
+# hora d'estiu / 05:30 hora d'hivern); el dedup a Firestore (dailyDigestLog)
+# evita que s'enviïn dos correus el mateix dia encara que es disparin els dos.
+on:
+  schedule:
+    - cron: '30 4 * * *'
+  workflow_dispatch:
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instal·lar dependencies
+        run: pip install -r scripts/requirements.txt
+      - name: Enviar resum diari
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: python scripts/daily_digest.py
