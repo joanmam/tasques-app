@@ -194,7 +194,7 @@
     .track-btn svg{width:13px;height:13px}
     .recurrence-chip{font-size:10px;padding:1px 5px;border-radius:8px;background:rgba(79,190,150,.12);color:var(--success);font-weight:500}
     /* detail panel */
-    .detail-panel{width:340px;min-width:340px;border-left:1px solid var(--border);background:var(--sidebar);display:flex;flex-direction:column;overflow-y:auto}
+    .detail-panel{width:400px;min-width:400px;border-left:1px solid var(--border);background:var(--sidebar);display:flex;flex-direction:column;overflow-y:auto}
     .detail-header{padding:13px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
     .detail-header h3{font-size:14px;font-weight:600}
     .detail-body{padding:16px;display:flex;flex-direction:column;gap:12px}
@@ -2438,15 +2438,21 @@ function DetailPanel({task,lists,defaultFields,allTags,currentUserUid,currentUse
           <label>Subtasques ({(local.subtasks||[]).filter(s=>s.done).length}/{(local.subtasks||[]).length})</label>
           <div className="subtask-editor">
             {(local.subtasks||[]).map(s=>(
-              <div key={s.id} className="subtask-row">
-                <div className={`subtask-check ${s.done?'checked':''}`} onClick={()=>updSubtask(s.id,{done:!s.done})}/>
-                <input value={s.title} placeholder="Subtasca..." onChange={e=>updSubtask(s.id,{title:e.target.value})}
-                  style={s.done?{textDecoration:'line-through',opacity:.5}:{}}/>
-                <input type="date" className="detail-date" style={{width:112,flexShrink:0}} value={s.start||''}
-                  onChange={e=>updSubtask(s.id,{start:e.target.value})} title="Data d'inici"/>
-                <input type="date" className="detail-date" style={{width:112,flexShrink:0}} value={s.due||''}
-                  onChange={e=>updSubtask(s.id,{due:e.target.value})} title="Data de venciment"/>
-                <span className="del" onClick={()=>delSubtask(s.id)}>×</span>
+              <div key={s.id} className="subtask-row" style={{flexDirection:'column',alignItems:'stretch',gap:5}}>
+                <div style={{display:'flex',alignItems:'center',gap:6}}>
+                  <div className={`subtask-check ${s.done?'checked':''}`} onClick={()=>updSubtask(s.id,{done:!s.done})}/>
+                  <input value={s.title} placeholder="Subtasca..." onChange={e=>updSubtask(s.id,{title:e.target.value})}
+                    style={{flex:1,minWidth:0,...(s.done?{textDecoration:'line-through',opacity:.5}:{})}}/>
+                  <span className="del" onClick={()=>delSubtask(s.id)}>×</span>
+                </div>
+                <div style={{display:'flex',alignItems:'center',gap:6,paddingLeft:20}}>
+                  <span style={{fontSize:10,color:'var(--text3)',flexShrink:0}}>Inici</span>
+                  <input type="date" className="detail-date" style={{flex:1,minWidth:0}} value={s.start||''}
+                    onChange={e=>updSubtask(s.id,{start:e.target.value})}/>
+                  <span style={{fontSize:10,color:'var(--text3)',flexShrink:0}}>Fi</span>
+                  <input type="date" className="detail-date" style={{flex:1,minWidth:0}} value={s.due||''}
+                    onChange={e=>updSubtask(s.id,{due:e.target.value})}/>
+                </div>
               </div>
             ))}
             <button className="add-subtask-btn" onClick={addSubtask}>{Ic.plus} Afegir subtasca</button>
