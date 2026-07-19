@@ -3938,25 +3938,29 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
     window.addEventListener('pointercancel',finish);
   };
 
-  // Una tasca es "vigent" si avui cau entre inici i fi (ambdos inclosos), o "vençuda" si la data
-  // de fi ja ha passat i encara no esta completada. Aquestes son sempre les que es mostren al Gantt,
-  // independentment del rang (Setmana/Mes/Total) triat: el rang nomes decideix quants dies es veuen
-  // a l'eix horitzontal, no quines files hi surten.
-  const isVigentOrOverdue = t => {
+  // Gantt "normal": es mostra tota tasca/subtasca la data de la qual intersecti amb la finestra
+  // visible (com sempre), MES les vençudes (data de fi ja passada i encara no completada), que es
+  // veuen sempre encara que quedin fora de la finestra.
+  const inWindowTask = t => {
     const s=t.startDate||t.endDate, e=t.endDate||t.startDate;
-    if (!s||!e) return false;
-    if (s<=today&&e>=today) return true; // vigent
-    return e<today && t.status!=='completada'; // vençuda
+    return !!s && !!e && e>=winStartStr && s<=winEndStr;
   };
-  const subtaskQualifies = s => {
+  const isTaskOverdue = t => {
+    const e=t.endDate||t.startDate;
+    return !!e && e<today && t.status!=='completada';
+  };
+  const inWindowSubtask = s => {
     const ss=s.start||s.due, se=s.due||s.start;
-    if (!ss||!se) return false;
-    if (ss<=today&&se>=today) return true; // vigent
-    return se<today && !s.done; // vençuda
+    return !!ss && !!se && se>=winStartStr && ss<=winEndStr;
   };
+  const isSubtaskOverdue = s => {
+    const se=s.due||s.start;
+    return !!se && se<today && !s.done;
+  };
+  const subtaskQualifies = s => inWindowSubtask(s) || isSubtaskOverdue(s);
   const visibleTasks=tasks.filter(t=>{
     const qualifyingSubtasks = (t.subtasks||[]).filter(subtaskQualifies);
-    const taskQualifies = isVigentOrOverdue(t);
+    const taskQualifies = inWindowTask(t) || isTaskOverdue(t);
     if (!taskQualifies && qualifyingSubtasks.length===0) return false;
     // Amaga tasques completades per defecte, tret que tinguin una subtasca pendent que si calgui mostrar,
     // o que l'usuari hagi activat "Mostra completades".
@@ -3969,11 +3973,10 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
     <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0}}>
       {/* Toolbar */}
       <div style={{padding:'9px 16px',display:'flex',alignItems:'center',gap:8,borderBottom:'1px solid var(--border)',flexShrink:0,flexWrap:'wrap'}}>
-        <div className="view-toggle">
-          <button className={`view-btn ${rangeMode==='week'?'active':''}`} onClick={()=>changeRangeMode('week')}>Setmana</button>
-          <button className={`view-btn ${rangeMode==='month'?'active':''}`} onClick={()=>changeRangeMode('month')}>Mes</button>
-          <button className={`view-btn ${rangeMode==='total'?'active':''}`} onClick={()=>changeRangeMode('total')}>Total</button>
-        </div>
+        <button className={`filter-chip ${rangeMode==='week'?'active':''}`} onClick={()=>changeRangeMode('week')}>Setmana</button>
+        <button className={`filter-chip ${rangeMode==='month'?'active':''}`} onClick={()=>changeRangeMode('month')}>Mes</button>
+        <button className={`filter-chip ${rangeMode==='total'?'active':''}`} onClick={()=>changeRangeMode('total')}>Total</button>
+        <span className="filter-sep">|</span>
         <button className="btn btn-ghost" style={{padding:'5px 10px',fontSize:12}} onClick={()=>setOffset(o=>o-stepSize)}>← Anterior</button>
         <button className="btn btn-ghost" style={{padding:'5px 10px',fontSize:12}} onClick={()=>setOffset(0)}>Avui</button>
         <button className="btn btn-ghost" style={{padding:'5px 10px',fontSize:12}} onClick={()=>setOffset(o=>o+stepSize)}>Següent →</button>
