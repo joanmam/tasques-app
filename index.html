@@ -1332,6 +1332,15 @@ function App() {
     if (!Object.keys(upd).length) return;
     await db.collection('tasks').doc(taskId).update(upd);
   };
+  // Actualitza les dates (inici/fi) d'una subtasca concreta (des del Gantt, arrossegant la barra).
+  // Les subtasques viuen dins l'array 'subtasks' del document de la tasca, així que cal reescriure
+  // tot l'array amb nomes aquell element canviat.
+  const updateSubtaskDates = async (taskId, subId, patch) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+    const newSubtasks = (task.subtasks||[]).map(s => s.id===subId ? {...s, ...patch} : s);
+    await db.collection('tasks').doc(taskId).update({subtasks: newSubtasks});
+  };
   const toggleTrack = async task => {
     const newVal = !task.tracked;
     if (task.seriesId) {
@@ -1848,7 +1857,8 @@ function App() {
             </div>
             {view==='gantt' ? (
               <GanttView tasks={ganttTasks} lists={lists}
-                selectedTask={selectedTask} onSelectTask={setSelectedTask} onUpdateDates={updateTaskDates}/>
+                selectedTask={selectedTask} onSelectTask={setSelectedTask} onUpdateDates={updateTaskDates}
+                onUpdateSubtaskDates={updateSubtaskDates}/>
             ) : view==='calendar' ? (
               <CalendarView tasks={filtered} lists={lists} selectedTask={selectedTask} onSelectTask={setSelectedTask} onMoveTask={moveTaskToDate}
                 gcalToken={gcalToken} gcalEvents={gcalEvents} setGcalEvents={setGcalEvents} gcalError={gcalError} setGcalError={setGcalError} gcalCalendars={gcalCalendars}/>
@@ -2087,7 +2097,7 @@ function SubtasksView({tasks,lists,selectedTask,onSelectTask,onUpdateTask}) {
       <div className="task-body">
         <div className="task-title">{s.title}</div>
         <div className="task-meta">
-          <span style={{fontSize:11,color:'var(--text3)'}}>{s.task.title} · <strong style={{fontWeight:700,color:'var(--text2)'}}>{listName(s.task.listId)}</strong></span>
+          <span style={{fontSize:11,color:'var(--text3)'}}><strong style={{fontWeight:700,color:'var(--text2)'}}>{s.task.title}</strong> · {listName(s.task.listId)}</span>
           {s.due && (()=>{
             const cat = dateCategoryForDay(s.due);
             const cfg = DATE_GROUPS.find(g=>g.key===cat);
@@ -3872,7 +3882,7 @@ function Heatmap({days, logs, color, period}) {
 }
 
 // ─── GANTT VIEW ───────────────────────────────────────────────────────────────
-function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdateDates}) {
+function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdateDates,onUpdateSubtaskDates}) {
   const ROW_H=38, LABEL_W=210;
   const [rangeMode,setRangeMode]=useState('total'); // 'week' | 'month' | 'total'
   const DAY_W=24;
@@ -3882,7 +3892,7 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
   const scrollRef=useRef(null);
   const dragRef=useRef(null);
   const draggedRef=useRef(false);
-  const [dragPreview,setDragPreview]=useState(null); // {taskId, si, ei}
+  const [dragPreview,setDragPreview]=useState(null); // {key, si, ei} — key = taskId (tasca) o taskId+':'+subId (subtasca)
   const changeRangeMode = mode => { setRangeMode(mode); setOffset(0); };
 
   // Mode 'total': finestra amb marge de -7 dies (com abans). Setmana/Mes: comença exactament avui.
@@ -3903,6 +3913,20 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
     if(!months.length||months[months.length-1].label!==label) months.push({label,count:1});
     else months[months.length-1].count++;
   });
+  // Desplaçament (en dies) de cada mes dins la finestra visible, per pintar bandes alternades
+  // de fons darrere de tota la graella (capçalera + files) i remarcar els límits de mes.
+  const monthOffsets=[];
+  {
+    let idx=0;
+    months.forEach(m=>{ monthOffsets.push(idx); idx+=m.count; });
+  }
+  const MonthBands = ({height}) => (
+    <>
+      {months.map((m,mi)=> mi%2===1 ? (
+        <div key={'mb'+mi} style={{position:'absolute',top:0,left:monthOffsets[mi]*DAY_W,width:m.count*DAY_W,height,background:'rgba(79,142,247,.05)',pointerEvents:'none'}}/>
+      ) : null)}
+    </>
+  );
   const dayIdx=str=>{const diff=new Date(str+'T12:00')-winStart;return Math.floor(diff/86400000);};
   const todayIdx=days.findIndex(d=>d.isToday);
   useEffect(()=>{
@@ -3913,10 +3937,12 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
   },[offset]);
   // Arrossegar la barra (mode 'move') o les vores ('start'/'end') per canviar les dates.
   const idxToDate=idx=>{const x=new Date(winStart);x.setDate(x.getDate()+idx);return ymd(x);};
-  const startBarDrag=(e,t,mode,si,ei)=>{
+  // kind: 'task' -> ids={taskId} | 'subtask' -> ids={taskId,subId}
+  const startBarDrag=(e,kind,ids,mode,si,ei)=>{
     e.stopPropagation();
     if(typeof e.button==='number'&&e.button!==0) return;
-    dragRef.current={taskId:t.id,mode,si,ei,startX:e.clientX,curSi:si,curEi:ei,moved:false};
+    const key = kind==='task' ? ids.taskId : (ids.taskId+':'+ids.subId);
+    dragRef.current={kind,ids,key,mode,si,ei,startX:e.clientX,curSi:si,curEi:ei,moved:false};
     document.body.style.userSelect='none';
     const move=ev=>{
       const d=dragRef.current; if(!d) return;
@@ -3925,7 +3951,7 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
       if(d.mode==='move'){nsi=d.si+delta;nei=d.ei+delta;}
       else if(d.mode==='start'){nsi=Math.min(d.si+delta,d.ei);}
       else if(d.mode==='end'){nei=Math.max(d.ei+delta,d.si);}
-      if(nsi!==d.curSi||nei!==d.curEi){d.curSi=nsi;d.curEi=nei;d.moved=true;draggedRef.current=true;setDragPreview({taskId:d.taskId,si:nsi,ei:nei});}
+      if(nsi!==d.curSi||nei!==d.curEi){d.curSi=nsi;d.curEi=nei;d.moved=true;draggedRef.current=true;setDragPreview({key:d.key,si:nsi,ei:nei});}
       if(ev.cancelable) ev.preventDefault();
     };
     const finish=()=>{
@@ -3934,8 +3960,10 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
       window.removeEventListener('pointerup',finish);
       window.removeEventListener('pointercancel',finish);
       document.body.style.userSelect='';
-      if(d&&d.moved&&onUpdateDates){
-        onUpdateDates(d.taskId,{startDate:idxToDate(d.curSi),endDate:idxToDate(d.curEi)});
+      if(d&&d.moved){
+        const ns=idxToDate(d.curSi), ne=idxToDate(d.curEi);
+        if(d.kind==='task'&&onUpdateDates) onUpdateDates(d.ids.taskId,{startDate:ns,endDate:ne});
+        else if(d.kind==='subtask'&&onUpdateSubtaskDates) onUpdateSubtaskDates(d.ids.taskId,d.ids.subId,{start:ns,due:ne});
       }
       dragRef.current=null;
       setDragPreview(null);
@@ -4012,7 +4040,12 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
               {/* Month row */}
               <div style={{display:'flex',height:28,borderBottom:'1px solid var(--border)'}}>
                 {months.map((m,i)=>(
-                  <div key={i} style={{width:m.count*DAY_W,flexShrink:0,borderRight:'1px solid var(--border)',fontSize:10,fontWeight:700,color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.04em',padding:'0 8px',display:'flex',alignItems:'center',overflow:'hidden'}}>
+                  <div key={i} style={{
+                    width:m.count*DAY_W,flexShrink:0,borderRight:'1px solid var(--border)',
+                    fontSize:11,fontWeight:800,color:'var(--text)',textTransform:'uppercase',letterSpacing:'.04em',
+                    padding:'0 8px',display:'flex',alignItems:'center',overflow:'hidden',
+                    background:i%2===1?'rgba(79,142,247,.09)':'transparent'
+                  }}>
                     {m.label}
                   </div>
                 ))}
@@ -4053,10 +4086,14 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
                 const {t,s} = row;
                 const list=lists.find(l=>l.id===t.listId);
                 const color=list?.color||'#4f8ef7';
+                const subKey=t.id+':'+s.id;
+                const subPreviewing=dragPreview&&dragPreview.key===subKey;
                 const ss=s.start||s.due, se=s.due||s.start;
                 const si=dayIdx(ss),ei=dayIdx(se);
-                const barLeft=Math.max(0,si)*DAY_W+2;
-                const barW=Math.max(DAY_W-4,(Math.min(DAYS-1,ei)-Math.max(0,si)+1)*DAY_W-4);
+                const dsi=subPreviewing?dragPreview.si:si;
+                const dei=subPreviewing?dragPreview.ei:ei;
+                const barLeft=Math.max(0,dsi)*DAY_W+2;
+                const barW=Math.max(DAY_W-4,(Math.min(DAYS-1,dei)-Math.max(0,dsi)+1)*DAY_W-4);
                 const subOverdue=!s.done&&se&&se<today;
                 return (
                   <div key={t.id+'-sub-'+s.id} style={{display:'flex',height:30,borderBottom:'1px solid var(--border)',cursor:'pointer'}}
@@ -4073,20 +4110,28 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
                     </div>
                     {/* Timeline */}
                     <div style={{flex:1,position:'relative'}}>
+                      <MonthBands height="100%"/>
                       {days.map((day,di)=>day.isWeekend?(
                         <div key={di} style={{position:'absolute',top:0,left:di*DAY_W,width:DAY_W,height:'100%',background:'var(--bg2)',opacity:.45,pointerEvents:'none'}}/>
                       ):null)}
                       {todayIdx>=0&&(
                         <div style={{position:'absolute',top:0,left:todayIdx*DAY_W+DAY_W/2-1,width:2,height:'100%',background:'var(--accent)',opacity:.3,pointerEvents:'none'}}/>
                       )}
-                      {si<=DAYS-1&&ei>=0&&(
-                        <div title={`${subOverdue?'⚠ ':''}${s.title} (${fmtList(ss)}${se!==ss?' → '+fmtList(se):''})`}
+                      {dsi<=DAYS-1&&dei>=0&&(
+                        <div title="Arrossega per moure · arrossega les vores per canviar l'inici o el final"
+                          onPointerDown={e=>startBarDrag(e,'subtask',{taskId:t.id,subId:s.id},'move',si,ei)}
                           style={{
                             position:'absolute',left:barLeft,top:8,width:barW,height:14,
                             background:s.done?'var(--bg3)':subOverdue?'var(--danger)':hexToRgba(color,.5),
                             borderRadius:4,border:`1px solid ${s.done?'var(--border)':subOverdue?'var(--danger)':color}`,
-                            opacity:s.done?.4:1,pointerEvents:'none'
-                          }}/>
+                            opacity:s.done?.4:1,cursor:'grab',touchAction:'none',userSelect:'none',
+                            boxShadow:subPreviewing?`0 0 0 2px ${color}`:undefined,transition:'box-shadow .1s'
+                          }}>
+                          <div onPointerDown={e=>startBarDrag(e,'subtask',{taskId:t.id,subId:s.id},'start',si,ei)} title="Canvia la data d'inici"
+                            style={{position:'absolute',left:0,top:0,width:7,height:'100%',cursor:'ew-resize',touchAction:'none'}}/>
+                          <div onPointerDown={e=>startBarDrag(e,'subtask',{taskId:t.id,subId:s.id},'end',si,ei)} title="Canvia la data final"
+                            style={{position:'absolute',right:0,top:0,width:7,height:'100%',cursor:'ew-resize',touchAction:'none'}}/>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -4097,7 +4142,7 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
               const color=list?.color||'#4f8ef7';
               const {s,e} = taskRange(t);
               const si=dayIdx(s),ei=dayIdx(e);
-              const previewing=dragPreview&&dragPreview.taskId===t.id;
+              const previewing=dragPreview&&dragPreview.key===t.id;
               const dsi=previewing?dragPreview.si:si;
               const dei=previewing?dragPreview.ei:ei;
               const barLeft=Math.max(0,dsi)*DAY_W+2;
@@ -4122,6 +4167,7 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
                   </div>
                   {/* Timeline */}
                   <div style={{flex:1,position:'relative',background:ri%2===0?'transparent':'rgba(0,0,0,.013)'}}>
+                    <MonthBands height="100%"/>
                     {/* Weekend cols */}
                     {days.map((day,di)=>day.isWeekend?(
                       <div key={di} style={{position:'absolute',top:0,left:di*DAY_W,width:DAY_W,height:'100%',background:'var(--bg2)',opacity:.45,pointerEvents:'none'}}/>
@@ -4133,7 +4179,7 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
                     {/* Bar */}
                     {dsi<=DAYS-1&&dei>=0&&(
                       <div title="Arrossega per moure · arrossega les vores per canviar l'inici o el final"
-                        onPointerDown={e=>startBarDrag(e,t,'move',si,ei)}
+                        onPointerDown={e=>startBarDrag(e,'task',{taskId:t.id},'move',si,ei)}
                         style={{
                         position:'absolute',left:barLeft,top:7,width:barW,height:24,
                         background:isDone?'var(--bg3)':overdue?'var(--danger)':hexToRgba(color,.82),
@@ -4143,9 +4189,9 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
                         boxShadow:isSelected?`0 0 0 2px ${color}`:(previewing?`0 0 0 2px ${color}`:undefined),
                         transition:'box-shadow .1s',cursor:'grab',touchAction:'none',userSelect:'none'
                       }}>
-                        <div onPointerDown={e=>startBarDrag(e,t,'start',si,ei)} title="Canvia la data d'inici"
+                        <div onPointerDown={e=>startBarDrag(e,'task',{taskId:t.id},'start',si,ei)} title="Canvia la data d'inici"
                           style={{position:'absolute',left:0,top:0,width:9,height:'100%',cursor:'ew-resize',touchAction:'none'}}/>
-                        <div onPointerDown={e=>startBarDrag(e,t,'end',si,ei)} title="Canvia la data final"
+                        <div onPointerDown={e=>startBarDrag(e,'task',{taskId:t.id},'end',si,ei)} title="Canvia la data final"
                           style={{position:'absolute',right:0,top:0,width:9,height:'100%',cursor:'ew-resize',touchAction:'none'}}/>
                         {barW>55&&<span style={{fontSize:10,fontWeight:500,color:'white',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',textShadow:'0 1px 3px rgba(0,0,0,.45)',pointerEvents:'none'}}>
                           {overdue?'⚠ ':''}{t.title}
