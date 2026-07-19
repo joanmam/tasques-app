@@ -2442,7 +2442,9 @@ function DetailPanel({task,lists,defaultFields,allTags,currentUserUid,currentUse
                 <div className={`subtask-check ${s.done?'checked':''}`} onClick={()=>updSubtask(s.id,{done:!s.done})}/>
                 <input value={s.title} placeholder="Subtasca..." onChange={e=>updSubtask(s.id,{title:e.target.value})}
                   style={s.done?{textDecoration:'line-through',opacity:.5}:{}}/>
-                <input type="date" className="detail-date" style={{width:126,flexShrink:0}} value={s.due||''}
+                <input type="date" className="detail-date" style={{width:112,flexShrink:0}} value={s.start||''}
+                  onChange={e=>updSubtask(s.id,{start:e.target.value})} title="Data d'inici"/>
+                <input type="date" className="detail-date" style={{width:112,flexShrink:0}} value={s.due||''}
                   onChange={e=>updSubtask(s.id,{due:e.target.value})} title="Data de venciment"/>
                 <span className="del" onClick={()=>delSubtask(s.id)}>×</span>
               </div>
