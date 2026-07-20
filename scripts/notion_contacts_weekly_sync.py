@@ -19,6 +19,12 @@ propietari (mai toquem contactes d'altres propietaris o creats per una altra via
 Els contactes son PRIVATS per usuari (camp ownerId): nomes el propietari (OWNER_EMAIL)
 els pot llegir des de l'app (veure regles de Firestore v8, contacts/{contactId}).
 
+A mes del run setmanal programat, admet un mode "--if-requested": mira el
+document Firestore syncRequests/notionContacts i, nomes si "pending" es true,
+fa la sincronitzacio ara mateix (i neteja la peticio). Aixo permet un boto a
+l'app ("Sincronitza contactes ara") per disparar-ho sense esperar al dilluns
+ni tocar GitHub — el mateix workflow de recordatoris (cada ~10 min) ho revisa.
+
 Secrets (variables d'entorn, via GitHub Secrets):
     NOTION_API_KEY            -> secret de la integracio interna de Notion
                                   (cal compartir la base "Contactes" amb ella)
@@ -32,6 +38,7 @@ from firebase_admin import credentials, firestore, auth
 HERE = os.path.dirname(os.path.abspath(__file__))
 OWNER_EMAIL = "joanmam@gmail.com"
 DRY_RUN = "--dry-run" in sys.argv
+IF_REQUESTED = "--if-requested" in sys.argv
 
 # ID de la data source "Contactes" (obtingut via el connector MCP de Notion el
 # 15 juliol 2026; es estable mentre no es reconstrueixi la base de dades).
@@ -143,7 +150,8 @@ def build_doc(page, owner_uid):
     }
 
 
-def main():
+def run_sync(db):
+    """Fa la sincronitzacio completa Notion -> Firestore. Retorna (actualitzats, eliminats)."""
     pages = fetch_personal_contacts()
     print(f"Contactes 'Personal' trobats a Notion: {len(pages)}")
 
@@ -152,9 +160,8 @@ def main():
         for nid, doc in prepared[:10]:
             print(f"[DRY] {nid} -> {doc['name']} | {doc['phone1'] or doc['phone2'] or '(sense telefon)'}")
         print(f"[DRY] Es sincronitzarien {len(prepared)} contactes. Cap canvi fet.")
-        return
+        return 0, 0
 
-    db = init_db()
     owner_uid = auth.get_user_by_email(OWNER_EMAIL).uid
     print(f"Propietari: {OWNER_EMAIL} -> uid={owner_uid}")
 
@@ -179,6 +186,7 @@ def main():
     # --- d'altres propietaris ni de fonts diferents de Notion.
     existing = db.collection("contacts").where("source", "==", "notion").where("ownerId", "==", owner_uid).stream()
     to_delete = [doc.id for doc in existing if doc.id not in current_ids]
+    deleted = 0
     if to_delete:
         del_batch = db.batch()
         for i, doc_id in enumerate(to_delete, 1):
@@ -187,8 +195,49 @@ def main():
                 del_batch.commit()
                 del_batch = db.batch()
         del_batch.commit()
-        print(f"Eliminats {len(to_delete)} contactes que ja no son 'Personal' a Notion.")
+        deleted = len(to_delete)
+        print(f"Eliminats {deleted} contactes que ja no son 'Personal' a Notion.")
 
+    return count, deleted
+
+
+def run_if_requested(db):
+    """Mode lleuger per al workflow de recordatoris (cada ~10 min): nomes fa la
+    sincronitzacio (i truca a Notion) si hi ha una peticio pendent a Firestore."""
+    ref = db.collection("syncRequests").document("notionContacts")
+    snap = ref.get()
+    data = snap.to_dict() if snap.exists else None
+    if not data or not data.get("pending"):
+        print("Cap peticio pendent de sincronitzacio de contactes Notion.")
+        return
+
+    print("Peticio pendent trobada — sincronitzant contactes de Notion ara...")
+    try:
+        count, deleted = run_sync(db)
+        ref.set({
+            "pending": False,
+            "lastRunAt": firestore.SERVER_TIMESTAMP,
+            "lastResult": f"{count} actualitzats, {deleted} eliminats",
+        }, merge=True)
+        print(f"OK  sincronitzacio a peticio completada ({count} actualitzats, {deleted} eliminats).")
+    except Exception as e:
+        ref.set({"pending": False, "lastError": str(e)}, merge=True)
+        print(f"ERR sincronitzacio a peticio: {e}")
+        raise
+
+
+def main():
+    if IF_REQUESTED:
+        db = init_db()
+        run_if_requested(db)
+        return
+
+    if DRY_RUN:
+        run_sync(None)
+        return
+
+    db = init_db()
+    run_sync(db)
     print("Sincronitzacio setmanal completada.")
 
 
