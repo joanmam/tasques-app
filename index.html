@@ -906,6 +906,7 @@ function App() {
   };
   const [pushOn,setPushOn]               = useState(false);
   useEffect(()=>{ let alive=true; isPushActive().then(on=>{ if(alive) setPushOn(on); }); return ()=>{alive=false;}; }, [user]);
+  const [digestRequesting,setDigestRequesting] = useState(false);
   const [voiceListening,setVoiceListening] = useState(false);
   const [voicePreFill,setVoicePreFill]   = useState(null);
   const [sidebarOpen,setSidebarOpen] = useState(false);
@@ -1344,7 +1345,6 @@ function App() {
   // Demana que es torni a enviar el resum diari (vençudes+avui) per correu, sense esperar a les 6:00.
   // No cal accés a GitHub: el workflow de recordatoris (que ja es dispara cada ~10 min) mira aquesta
   // col·lecció i processa les peticions pendents.
-  const [digestRequesting,setDigestRequesting] = useState(false);
   const requestDigestResend = async () => {
     if (!user || digestRequesting) return;
     setDigestRequesting(true);
