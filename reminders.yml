@@ -1,0 +1,27 @@
+name: Recordatoris push
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'   # cada 10 min (GitHub pot afegir-hi una mica de retard)
+  workflow_dispatch:           # permet executar-lo a ma per provar
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instal·lar dependencies
+        run: pip install -r scripts/requirements.txt
+      - name: Enviar recordatoris vençuts
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: python scripts/send_reminders.py
+      - name: Processar peticions de reenviament del resum diari
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: python scripts/daily_digest.py --process-requests

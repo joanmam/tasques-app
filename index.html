@@ -1341,6 +1341,26 @@ function App() {
     const newSubtasks = (task.subtasks||[]).map(s => s.id===subId ? {...s, ...patch} : s);
     await db.collection('tasks').doc(taskId).update({subtasks: newSubtasks});
   };
+  // Demana que es torni a enviar el resum diari (vençudes+avui) per correu, sense esperar a les 6:00.
+  // No cal accés a GitHub: el workflow de recordatoris (que ja es dispara cada ~10 min) mira aquesta
+  // col·lecció i processa les peticions pendents.
+  const [digestRequesting,setDigestRequesting] = useState(false);
+  const requestDigestResend = async () => {
+    if (!user || digestRequesting) return;
+    setDigestRequesting(true);
+    try {
+      await db.collection('digestRequests').doc(user.uid).set({
+        uid: user.uid,
+        email: user.email,
+        requestedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        status: 'pending',
+      });
+      showToast('✓ Resum sol·licitat — arribarà per correu en uns minuts');
+    } catch (err) {
+      showToast('⚠ No s\'ha pogut sol·licitar el resum');
+    }
+    setDigestRequesting(false);
+  };
   const toggleTrack = async task => {
     const newVal = !task.tracked;
     if (task.seriesId) {
@@ -1582,6 +1602,10 @@ function App() {
               }}>
               <span style={{display:'inline-flex',alignItems:'center',gap:7}}>{Ic.bell} {pushOn?'Notificacions actives':'Notificacions desactivades'}</span>
               <span style={{fontSize:10,fontWeight:700,padding:'2px 7px',borderRadius:10,background:pushOn?'var(--success)':'var(--bg3)',color:pushOn?'#fff':'var(--text3)'}}>{pushOn?'ON':'OFF'}</span>
+            </button>
+            <button className="btn-logout" style={{marginTop:6}} disabled={digestRequesting} onClick={requestDigestResend}
+              title="Torna a enviar el resum de tasques d'avui i vençudes per correu">
+              <span style={{display:'inline-flex',alignItems:'center',gap:7}}>{Ic.repeat} {digestRequesting?'Enviant sol·licitud...':'Reenvia el meu resum'}</span>
             </button>
           </div>
           <div className="sidebar-section">
