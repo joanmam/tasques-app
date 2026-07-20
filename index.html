@@ -907,6 +907,7 @@ function App() {
   const [pushOn,setPushOn]               = useState(false);
   useEffect(()=>{ let alive=true; isPushActive().then(on=>{ if(alive) setPushOn(on); }); return ()=>{alive=false;}; }, [user]);
   const [digestRequesting,setDigestRequesting] = useState(false);
+  const [notionSyncRequesting,setNotionSyncRequesting] = useState(false);
   const [voiceListening,setVoiceListening] = useState(false);
   const [voicePreFill,setVoicePreFill]   = useState(null);
   const [sidebarOpen,setSidebarOpen] = useState(false);
@@ -1361,6 +1362,24 @@ function App() {
     }
     setDigestRequesting(false);
   };
+  // Demana que es sincronitzin ara els contactes de Notion, sense esperar al dilluns.
+  // Mateix mecanisme que el reenviament del resum: escriu una petició a Firestore que
+  // el workflow de recordatoris (cada ~10 min) detecta i processa.
+  const requestNotionSync = async () => {
+    if (!user || notionSyncRequesting) return;
+    setNotionSyncRequesting(true);
+    try {
+      await db.collection('syncRequests').doc('notionContacts').set({
+        pending: true,
+        requestedBy: user.uid,
+        requestedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      }, {merge: true});
+      showToast('✓ Sincronització de contactes sol·licitada — trigarà uns minuts');
+    } catch (err) {
+      showToast('⚠ No s\'ha pogut sol·licitar la sincronització');
+    }
+    setNotionSyncRequesting(false);
+  };
   const toggleTrack = async task => {
     const newVal = !task.tracked;
     if (task.seriesId) {
@@ -1606,6 +1625,10 @@ function App() {
             <button className="btn-logout" style={{marginTop:6}} disabled={digestRequesting} onClick={requestDigestResend}
               title="Torna a enviar el resum de tasques d'avui i vençudes per correu">
               <span style={{display:'inline-flex',alignItems:'center',gap:7}}>{Ic.repeat} {digestRequesting?'Enviant sol·licitud...':'Reenvia el meu resum'}</span>
+            </button>
+            <button className="btn-logout" style={{marginTop:6}} disabled={notionSyncRequesting} onClick={requestNotionSync}
+              title="Sincronitza ara els contactes 'Personal' de Notion, sense esperar al dilluns">
+              <span style={{display:'inline-flex',alignItems:'center',gap:7}}>{Ic.repeat} {notionSyncRequesting?'Enviant sol·licitud...':'Sincronitza contactes Notion'}</span>
             </button>
           </div>
           <div className="sidebar-section">
