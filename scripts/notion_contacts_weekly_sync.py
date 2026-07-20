@@ -35,8 +35,16 @@ DRY_RUN = "--dry-run" in sys.argv
 
 # ID de la data source "Contactes" (obtingut via el connector MCP de Notion el
 # 15 juliol 2026; es estable mentre no es reconstrueixi la base de dades).
-NOTION_DATABASE_ID = "28f3d60a796981f1a71d000b26063ed8"
-NOTION_VERSION = "2022-06-28"
+#
+# IMPORTANT (actualitzat 20 juliol 2026): Notion ha migrat aquesta base de dades
+# al model "multi-source" (una base de dades ara pot tenir diverses "data sources").
+# Aixo trenca l'endpoint antic /v1/databases/{id}/query, que esperava l'ID del
+# contenidor "database" i no el de la "data source" — encara que l'ID d'aquesta
+# data source concreta (el que ja teniem aqui) NO ha canviat. La solucio oficial
+# de Notion es fer servir el nou endpoint de data sources amb la versio d'API
+# 2025-09-03, mantenint el mateix ID.
+NOTION_DATA_SOURCE_ID = "28f3d60a796981f1a71d000b26063ed8"
+NOTION_VERSION = "2025-09-03"
 
 
 def init_db():
@@ -66,7 +74,7 @@ def notion_headers():
 def fetch_personal_contacts():
     """Consulta l'API de Notion i retorna totes les pagines amb Personal=true."""
     headers = notion_headers()
-    url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
+    url = f"https://api.notion.com/v1/data_sources/{NOTION_DATA_SOURCE_ID}/query"
     body = {
         "filter": {"property": "Personal", "checkbox": {"equals": True}},
         "page_size": 100,
