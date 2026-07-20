@@ -8,6 +8,13 @@ propietari/assignat d'alguna tasca) rep el seu propi correu amb:
 Pensat per executar-se un cop al dia des de GitHub Actions (cron extern
 tipus cron-job.org a les 6:00, seguint el mateix patró que reminders.yml).
 
+A més, admet un mode "--process-requests": mira la col·lecció Firestore
+digestRequests (on l'app escriu una petició quan un usuari prem el botó
+"Reenvia el meu resum") i envia immediatament el resum a qui l'hagi demanat,
+sense esperar a les 6:00 i sense necessitat que aquell usuari tingui accés
+a GitHub. Aquest mode es pensat per executar-se sovint (per exemple des del
+mateix workflow de recordatoris, que ja es dispara cada ~10 min).
+
 Secrets (variables d'entorn, via GitHub Secrets):
     FIREBASE_SERVICE_ACCOUNT  -> contingut JSON del compte de servei de Firebase
     GMAIL_APP_PASSWORD        -> contrasenya d'aplicació de Gmail (16 caràcters)
@@ -20,7 +27,8 @@ Secrets (variables d'entorn, via GitHub Secrets):
 Per a proves locals: posa service-account.json en aquest directori i exporta
 GMAIL_APP_PASSWORD, i executa amb --dry-run per veure el contingut sense enviar
 res ni marcar-ho com enviat. Combina'l amb --only=email@... per mirar el resum
-d'una sola persona.
+d'una sola persona, o amb --process-requests per nomes mirar les peticions
+pendents de reenviament.
 """
 import os, sys, json, smtplib, ssl
 from email.message import EmailMessage
@@ -33,7 +41,8 @@ from firebase_admin import credentials, firestore, auth
 HERE = os.path.dirname(os.path.abspath(__file__))
 TZ = ZoneInfo("Europe/Madrid")
 DRY_RUN = "--dry-run" in sys.argv
-FORCE = "--force" in sys.argv          # ignora el dedup diari (per fer proves)
+FORCE = "--force" in sys.argv                        # ignora el dedup diari (per fer proves)
+PROCESS_REQUESTS = "--process-requests" in sys.argv   # nomes processa digestRequests i surt
 APP_URL = "https://joanmam.github.io/tasques-app/"
 
 GMAIL_USER = os.environ.get("GMAIL_USER") or "joanmam@gmail.com"
@@ -156,6 +165,97 @@ def build_digest_for_user(uid, today_str, lists_cache, all_tasks, list_name):
     return overdue_by_list, today_by_list, counts
 
 
+def render_email(uid, addr, today_str, today_label, lists_cache, all_tasks, list_name):
+    """Calcula i retorna (subject, body, counts) del resum d'un usuari, sense enviar-lo."""
+    overdue_by_list, today_by_list, c = build_digest_for_user(
+        uid, today_str, lists_cache, all_tasks, list_name
+    )
+    total = c["overdue_tasks"] + c["overdue_sub"] + c["today_tasks"] + c["today_sub"]
+
+    body_parts = [f"Resum de tasques — {today_label}\n"]
+    overdue_section = render_section("⚠️", "VENÇUDES", overdue_by_list, list_name)
+    today_section = render_section("📅", "AVUI", today_by_list, list_name)
+    if overdue_section:
+        body_parts.append(overdue_section)
+    if today_section:
+        body_parts.append(today_section)
+    if total == 0:
+        body_parts.append("Cap tasca vençuda ni per avui. 🎉\n")
+    body_parts.append(f"Obre l'app: {APP_URL}")
+    body = "\n".join(body_parts)
+
+    subject = f"📋 Resum de tasques — {today_label}" + (f" ({total})" if total else "")
+    return subject, body, c
+
+
+def send_email(get_smtp, addr, subject, body):
+    msg = EmailMessage()
+    msg["From"] = f"Tasques <{GMAIL_USER}>"
+    msg["To"] = addr
+    msg["Subject"] = subject
+    msg.set_content(body)
+    get_smtp().send_message(msg)
+
+
+def make_smtp_getter():
+    conn = {"c": None}
+    def get_smtp():
+        if conn["c"] is None:
+            ctx = ssl.create_default_context()
+            conn["c"] = smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ctx)
+            conn["c"].login(GMAIL_USER, GMAIL_APP_PASSWORD)
+        return conn["c"]
+    def close():
+        if conn["c"] is not None:
+            try:
+                conn["c"].quit()
+            except Exception:
+                pass
+    return get_smtp, close
+
+
+def process_pending_requests(db, today_str, today_label, lists_cache, all_tasks, list_name):
+    """Mira digestRequests i envia immediatament el resum a qui ho hagi demanat des de l'app."""
+    reqs = list(db.collection("digestRequests").where("status", "==", "pending").stream())
+    if not reqs:
+        print("Cap peticio pendent de reenviament.")
+        return 0
+
+    get_smtp, close_smtp = make_smtp_getter()
+    sent = 0
+    for doc in reqs:
+        d = doc.to_dict() or {}
+        uid = d.get("uid") or doc.id
+        try:
+            addr = auth.get_user(uid).email
+        except Exception:
+            addr = d.get("email")
+        if not addr:
+            print(f"[skip peticio] {uid}: sense email")
+            if not DRY_RUN:
+                doc.reference.delete()
+            continue
+
+        subject, body, c = render_email(uid, addr, today_str, today_label, lists_cache, all_tasks, list_name)
+        print(f"===== [peticio] {addr} =====")
+        print(body)
+
+        if DRY_RUN:
+            continue
+
+        try:
+            send_email(get_smtp, addr, subject, body)
+            doc.reference.delete()
+            sent += 1
+            print(f"OK  resum (peticio) enviat a {addr}")
+        except Exception as e:
+            print(f"ERR resum (peticio) a {addr}: {e}")
+            # No esborrem la peticio si ha fallat, per reintentar-ho al proper cicle.
+
+    close_smtp()
+    return sent
+
+
 def main():
     db = init_db()
     now = datetime.now(TZ)
@@ -176,6 +276,11 @@ def main():
         return (ldata or {}).get("name") or "Sense llista"
 
     all_tasks = [doc.to_dict() or {} for doc in db.collection("tasks").stream()]
+
+    if PROCESS_REQUESTS:
+        n = process_pending_requests(db, today_str, today_label, lists_cache, all_tasks, list_name)
+        print(f"Fet (mode peticions). Resums enviats: {n}.")
+        return
 
     # --- Qui rep resum: tothom que aparegui com a propietari/assignat d'una tasca,
     #     o propietari/membre d'una llista ---
@@ -200,15 +305,7 @@ def main():
         uids = {only_uid}
         print(f"[Mode prova] nomes s'envia a {ONLY_EMAIL}")
 
-    smtp_conn = None
-
-    def get_smtp():
-        nonlocal smtp_conn
-        if smtp_conn is None:
-            ctx = ssl.create_default_context()
-            smtp_conn = smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ctx)
-            smtp_conn.login(GMAIL_USER, GMAIL_APP_PASSWORD)
-        return smtp_conn
+    get_smtp, close_smtp = make_smtp_getter()
 
     sent = 0
     for uid in uids:
@@ -225,24 +322,7 @@ def main():
             print(f"[skip] {addr}: ja enviat avui")
             continue
 
-        overdue_by_list, today_by_list, c = build_digest_for_user(
-            uid, today_str, lists_cache, all_tasks, list_name
-        )
-        total = c["overdue_tasks"] + c["overdue_sub"] + c["today_tasks"] + c["today_sub"]
-
-        body_parts = [f"Resum de tasques — {today_label}\n"]
-        overdue_section = render_section("⚠️", "VENÇUDES", overdue_by_list, list_name)
-        today_section = render_section("📅", "AVUI", today_by_list, list_name)
-        if overdue_section:
-            body_parts.append(overdue_section)
-        if today_section:
-            body_parts.append(today_section)
-        if total == 0:
-            body_parts.append("Cap tasca vençuda ni per avui. 🎉\n")
-        body_parts.append(f"Obre l'app: {APP_URL}")
-        body = "\n".join(body_parts)
-
-        subject = f"📋 Resum de tasques — {today_label}" + (f" ({total})" if total else "")
+        subject, body, c = render_email(uid, addr, today_str, today_label, lists_cache, all_tasks, list_name)
 
         print(f"===== {addr} =====")
         print(body)
@@ -253,12 +333,7 @@ def main():
             continue
 
         try:
-            msg = EmailMessage()
-            msg["From"] = f"Tasques <{GMAIL_USER}>"
-            msg["To"] = addr
-            msg["Subject"] = subject
-            msg.set_content(body)
-            get_smtp().send_message(msg)
+            send_email(get_smtp, addr, subject, body)
             digest_log_ref.set({
                 "sentAt": firestore.SERVER_TIMESTAMP,
                 "date": today_str,
@@ -271,11 +346,7 @@ def main():
         except Exception as e:
             print(f"ERR resum a {addr}: {e}")
 
-    if smtp_conn is not None:
-        try:
-            smtp_conn.quit()
-        except Exception:
-            pass
+    close_smtp()
 
     if DRY_RUN:
         print("[DRY RUN] No s'ha enviat ni marcat res.")
