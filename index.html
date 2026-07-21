@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tasques</title>
   <link rel="manifest" href="manifest.json" />
-  <meta name="theme-color" content="#4f8ef7" />
+  <meta name="theme-color" content="#0fb8a6" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Tasques" />
@@ -39,21 +39,21 @@
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     :root{
-      --bg:#f4f6fb;--bg2:#eaecf5;--bg3:#d8dcee;
-      --sidebar:#ffffff;--card:#ffffff;--card-hover:#f0f2fa;--border:#dde0f0;
-      --accent:#4f8ef7;--accent2:#6fa3ff;
-      --text:#1a1a3e;--text2:#5555aa;--text3:#9999cc;
-      --danger:#f7604f;--success:#4fbe96;--warn:#f7b74f;
+      --bg:#f8fcfb;--bg2:#e3f7f2;--bg3:#c8ede4;
+      --sidebar:#ffffff;--card:#ffffff;--card-hover:#eafaf6;--border:#d3ede6;
+      --accent:#0fb8a6;--accent2:#26d9c3;
+      --text:#082523;--text2:#4a7a73;--text3:#8bb3ac;
+      --danger:#ff3b5c;--success:#22c55e;--warn:#ffa300;
     }
     [data-theme="dark"]{
-      --bg:#1a1a2e;--bg2:#16213e;--bg3:#0f3460;
-      --sidebar:#12122a;--card:#1e1e38;--card-hover:#252545;--border:#2a2a4a;
-      --text:#e8e8f0;--text2:#9999bb;--text3:#6666aa;
+      --bg:#0c1f1d;--bg2:#0f2c28;--bg3:#123a33;
+      --sidebar:#0a1a18;--card:#102825;--card-hover:#173832;--border:#1b433c;
+      --text:#e8fbf7;--text2:#8fc6ba;--text3:#5c9385;
     }
     body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden}
     #root{height:100vh;display:flex}
     .login-screen{flex:1;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--bg) 0%,var(--bg2) 100%)}
-    .login-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:48px 40px;text-align:center;width:380px;max-width:95vw;box-shadow:0 20px 60px rgba(79,142,247,.1);display:flex;flex-direction:column;align-items:center}
+    .login-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:48px 40px;text-align:center;width:380px;max-width:95vw;box-shadow:0 20px 60px rgba(15,184,166,.1);display:flex;flex-direction:column;align-items:center}
     .login-logo{font-size:40px;margin-bottom:8px}
     .login-card h1{font-size:24px;font-weight:600;margin-bottom:6px}
     .login-card>p{font-size:14px;color:var(--text2);margin-bottom:24px}
@@ -94,7 +94,7 @@
     .sidebar-avatar{width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:white;background:var(--accent)}
     .sidebar-user-name{font-size:12px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .btn-logout{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;padding:7px 10px;border-radius:8px;background:transparent;border:1px solid var(--border);color:var(--text2);font-size:12px;font-weight:500;font-family:inherit;cursor:pointer;transition:all .15s}
-    .btn-logout:hover{background:rgba(247,96,79,.08);border-color:var(--danger);color:var(--danger)}
+    .btn-logout:hover{background:rgba(255,59,92,.08);border-color:var(--danger);color:var(--danger)}
     .btn-logout svg{width:13px;height:13px}
     .sidebar-section{padding:10px 8px 4px}
     .sidebar-section-title{font-size:10px;font-weight:600;letter-spacing:.08em;color:var(--text3);text-transform:uppercase;padding:0 8px;margin-bottom:4px}
@@ -102,12 +102,12 @@
     .group-chips{display:flex;flex-wrap:wrap;gap:6px;padding:0 8px 8px}
     .group-chip{font-size:11px;padding:3px 9px;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;transition:all .15s}
     .group-chip:hover{color:var(--text2);border-color:var(--text3)}
-    .group-chip.active{background:rgba(79,142,247,.15);color:var(--accent);border-color:var(--accent)}
+    .group-chip.active{background:rgba(15,184,166,.15);color:var(--accent);border-color:var(--accent)}
     .sidebar-item{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;cursor:pointer;font-size:13px;color:var(--text2);transition:all .15s;user-select:none}
     .sidebar-item:hover{background:var(--card-hover);color:var(--text)}
-    .sidebar-item.active{background:rgba(79,142,247,.12);color:var(--accent);font-weight:500}
+    .sidebar-item.active{background:rgba(15,184,166,.12);color:var(--accent);font-weight:500}
     .sidebar-item .badge{margin-left:auto;background:var(--bg3);color:var(--text2);font-size:11px;padding:1px 6px;border-radius:10px}
-    .sidebar-item.active .badge{background:rgba(79,142,247,.2);color:var(--accent)}
+    .sidebar-item.active .badge{background:rgba(15,184,166,.2);color:var(--accent)}
     .sidebar-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
     .sidebar-gear{opacity:1;cursor:pointer;color:var(--text2);transition:all .15s;flex-shrink:0;padding:2px}
     .sidebar-gear:hover{color:var(--accent)}
@@ -137,11 +137,11 @@
     .btn-icon{padding:7px;border-radius:8px}
     .btn svg,.btn-icon svg{width:15px;height:15px;flex-shrink:0}
     .btn-danger-soft{background:transparent;color:var(--danger);border:1px solid transparent}
-    .btn-danger-soft:hover{background:rgba(247,96,79,.1);border-color:var(--danger)}
+    .btn-danger-soft:hover{background:rgba(255,59,92,.1);border-color:var(--danger)}
     .filters{padding:8px 24px;display:flex;gap:6px;border-bottom:1px solid var(--border);flex-wrap:wrap;align-items:center}
     .filter-chip{padding:3px 11px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border);color:var(--text2);background:transparent;transition:all .15s;font-family:inherit}
     .filter-chip:hover{border-color:var(--accent);color:var(--accent)}
-    .filter-chip.active{background:rgba(79,142,247,.12);border-color:var(--accent);color:var(--accent)}
+    .filter-chip.active{background:rgba(15,184,166,.12);border-color:var(--accent);color:var(--accent)}
     .filter-sep{color:var(--text3);font-size:12px;margin:0 2px}
     .more-filters{position:relative}
     .more-filters-panel{position:absolute;top:calc(100% + 6px);left:0;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px;min-width:200px;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.3);display:flex;flex-direction:column;gap:10px}
@@ -162,7 +162,7 @@
     .task-group-title{font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--text3);margin:14px 0 7px}
     .task-item{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:10px;background:var(--card);border:1px solid var(--border);margin-bottom:5px;cursor:pointer;transition:all .15s;animation:fadeIn .15s ease}
     .task-item:hover{border-color:var(--accent);background:var(--card-hover)}
-    .task-item.selected{border-color:var(--accent);box-shadow:0 0 0 2px rgba(79,142,247,.15)}
+    .task-item.selected{border-color:var(--accent);box-shadow:0 0 0 2px rgba(15,184,166,.15)}
     .task-item.done{opacity:.5}
     .task-item.done .task-title{text-decoration:line-through;color:var(--text3)}
     .task-check{width:18px;height:18px;border-radius:50%;border:2px solid var(--border);flex-shrink:0;margin-top:2px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
@@ -179,20 +179,20 @@
     .p-alta{background:var(--danger)}.p-mitjana{background:var(--warn)}.p-baixa{background:var(--success)}
     .tag{padding:1px 7px;border-radius:10px;font-size:11px;font-weight:500}
     .status-badge{padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500}
-    .s-pendent{background:rgba(153,153,187,.12);color:var(--text2)}
-    .s-en-curs{background:rgba(79,142,247,.12);color:var(--accent)}
-    .s-completada{background:rgba(79,190,150,.12);color:var(--success)}
+    .s-pendent{background:var(--bg3);color:var(--text2);font-weight:700}
+    .s-en-curs{background:var(--accent);color:#fff;font-weight:700}
+    .s-completada{background:var(--success);color:#fff;font-weight:700}
     .progress-bar{height:3px;background:var(--border);border-radius:2px;overflow:hidden;margin-top:5px}
     .progress-fill{height:100%;background:var(--accent);border-radius:2px;transition:width .3s}
     /* task actions */
     .task-actions{display:flex;gap:3px;flex-shrink:0;align-items:center;margin-top:1px}
     .delay-btn{padding:2px 6px;border-radius:5px;font-size:10px;font-weight:700;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--text2);font-family:inherit;transition:all .12s;white-space:nowrap;line-height:1.6}
-    .delay-btn:hover{border-color:var(--warn);color:var(--warn);background:rgba(247,183,79,.08)}
+    .delay-btn:hover{border-color:var(--warn);color:var(--warn);background:rgba(255,163,0,.08)}
     .track-btn{padding:4px;border-radius:6px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .12s;color:var(--text2)}
     .track-btn:hover{color:var(--accent)}
     .track-btn.on{color:var(--accent)}
     .track-btn svg{width:13px;height:13px}
-    .recurrence-chip{font-size:10px;padding:1px 5px;border-radius:8px;background:rgba(79,190,150,.12);color:var(--success);font-weight:500}
+    .recurrence-chip{font-size:10px;padding:1px 5px;border-radius:8px;background:rgba(34,197,94,.12);color:var(--success);font-weight:500}
     /* detail panel */
     .detail-panel{width:400px;min-width:400px;border-left:1px solid var(--border);background:var(--sidebar);display:flex;flex-direction:column;overflow-y:auto}
     .detail-header{padding:13px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
@@ -302,7 +302,7 @@
     .cal-dow{text-align:center;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;padding:6px 0}
     .cal-day{min-height:90px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:6px;cursor:pointer;transition:all .15s;position:relative}
     .cal-day:hover{border-color:var(--accent);background:var(--card-hover)}
-    .cal-day.today{border-color:var(--accent);background:rgba(79,142,247,.04)}
+    .cal-day.today{border-color:var(--accent);background:rgba(15,184,166,.04)}
     .cal-day.other-month{opacity:.4}
     .cal-day-num{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:50%}
     .cal-day.today .cal-day-num{background:var(--accent);color:white}
@@ -310,9 +310,9 @@
     .cal-task-chip:hover{opacity:.75}
     .cal-task-chip-drag{cursor:grab;touch-action:none}
     .cal-task-chip-drag:active{cursor:grabbing}
-    .cal-day.drag-over{border-color:var(--accent);background:rgba(79,142,247,.14);box-shadow:0 0 0 2px var(--accent) inset}
+    .cal-day.drag-over{border-color:var(--accent);background:rgba(15,184,166,.14);box-shadow:0 0 0 2px var(--accent) inset}
     .cal-drag-ghost{position:fixed;z-index:9999;pointer-events:none;transform:translate(-50%,-140%);background:var(--accent);color:#fff;font-size:11px;font-weight:600;padding:4px 8px;border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.3);max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .cal-gcal-chip{background:rgba(79,142,247,.12);color:#4f8ef7;cursor:default}
+    .cal-gcal-chip{background:rgba(15,184,166,.12);color:#0fb8a6;cursor:default}
     .cal-gcal-chip:hover{opacity:1}
     .cal-more{font-size:10px;color:var(--text3);margin-top:2px}
     .cal-day-tasks-popup{position:absolute;top:100%;left:0;z-index:50;min-width:200px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px;box-shadow:0 8px 30px rgba(0,0,0,.15);margin-top:4px}
@@ -342,10 +342,10 @@
     /* date badges */
     .date-badge{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:600;padding:2px 7px;border-radius:6px;white-space:nowrap}
     .date-badge svg{width:10px;height:10px}
-    .date-overdue{background:rgba(247,96,79,.15);color:var(--danger)}
-    .date-today{background:rgba(247,183,79,.18);color:#c97d00}
+    .date-overdue{background:rgba(255,59,92,.15);color:var(--danger)}
+    .date-today{background:rgba(255,163,0,.18);color:#c97d00}
     [data-theme="dark"] .date-today{color:var(--warn)}
-    .date-tomorrow{background:rgba(79,142,247,.12);color:var(--accent)}
+    .date-tomorrow{background:rgba(15,184,166,.12);color:var(--accent)}
     .date-soon{background:rgba(153,153,187,.1);color:var(--text2)}
     .date-later{background:transparent;color:var(--text3)}
     /* group header */
@@ -371,7 +371,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 const uid = () => Math.random().toString(36).slice(2,10);
 // Converteix un color hex (#rrggbb) en rgba amb l'opacitat indicada, per a fons difuminats
 const hexToRgba = (hex,alpha=0.15) => {
-  if (!hex) return `rgba(79,142,247,${alpha})`;
+  if (!hex) return `rgba(15,184,166,${alpha})`;
   const h = hex.replace('#','');
   const r = parseInt(h.length===3?h[0]+h[0]:h.substring(0,2),16);
   const g = parseInt(h.length===3?h[1]+h[1]:h.substring(2,4),16);
@@ -379,11 +379,11 @@ const hexToRgba = (hex,alpha=0.15) => {
   return `rgba(${r},${g},${b},${alpha})`;
 };
 const TAG_COLORS = [
-  {bg:'rgba(79,142,247,.15)',text:'#4f8ef7'},{bg:'rgba(79,190,150,.15)',text:'#4fbe96'},
-  {bg:'rgba(247,183,79,.15)',text:'#f7b74f'},{bg:'rgba(247,96,79,.15)',text:'#f7604f'},
+  {bg:'rgba(15,184,166,.15)',text:'#0fb8a6'},{bg:'rgba(34,197,94,.15)',text:'#22c55e'},
+  {bg:'rgba(255,163,0,.15)',text:'#ffa300'},{bg:'rgba(255,59,92,.15)',text:'#ff3b5c'},
   {bg:'rgba(175,79,247,.15)',text:'#af4ff7'},{bg:'rgba(79,215,247,.15)',text:'#4fd7f7'},
 ];
-const LIST_COLORS = ['#4f8ef7','#4fbe96','#f7b74f','#f7604f','#af4ff7','#4fd7f7','#ff8fab','#a8e6cf'];
+const LIST_COLORS = ['#0fb8a6','#22c55e','#ffa300','#ff3b5c','#af4ff7','#4fd7f7','#ff8fab','#a8e6cf'];
 // Grups predefinits per organitzar les llistes (es poden ampliar des del modal de llista)
 const LIST_GROUPS = ['Professional','Personal'];
 const FIELD_TYPES = [
@@ -577,7 +577,7 @@ const gcalEventToDays = (ev, cal) => {
     dateStr, title:ev.summary||'(sense títol)', allDay,
     time: allDay?'':gcalDateTimeToLocalHHMM(ev.start?.dateTime),
     link: ev.htmlLink,
-    color: cal?.color||'#4f8ef7', calLabel: cal?.label||'Google Calendar'
+    color: cal?.color||'#0fb8a6', calLabel: cal?.label||'Google Calendar'
   }));
 };
 const fetchGcalEvents = async (token, calendarId, timeMinStr, timeMaxStr, cal) => {
@@ -888,8 +888,8 @@ function App() {
     clearGcalToken(); setGcalToken(null); setGcalEvents([]); setGcalError('');
   };
   const [gcalCalendars,setGcalCalendars] = useState([
-    {id:'primary',label:'Principal',color:'#4f8ef7'},
-    {id:FAMILY_CALENDAR_ID,label:'Familiar',color:'#4fbe96'}
+    {id:'primary',label:'Principal',color:'#0fb8a6'},
+    {id:FAMILY_CALENDAR_ID,label:'Familiar',color:'#22c55e'}
   ]);
   const [showGcalSettings,setShowGcalSettings] = useState(false);
   const saveGcalCalendars = async cals => {
@@ -1603,7 +1603,7 @@ function App() {
             <button className="btn-logout" style={{marginTop:6,justifyContent:'space-between',
                 color:pushOn?'var(--success)':'var(--text2)',
                 borderColor:pushOn?'var(--success)':'var(--border)',
-                background:pushOn?'rgba(79,190,150,.10)':'transparent'}}
+                background:pushOn?'rgba(34,197,94,.10)':'transparent'}}
               onClick={async()=>{
                 if(!pushSupported()){ showToast('⚠ Aquest navegador no admet notificacions push'); return; }
                 if(pushOn){
@@ -2421,7 +2421,7 @@ function DetailPanel({task,lists,defaultFields,allTags,currentUserUid,currentUse
           </div>
         )}
         {(local.recurrence&&local.recurrence!=='none'&&local.status!=='completada')&&(
-          <div style={{padding:'8px 10px',background:'rgba(247,183,79,.08)',border:'1px solid rgba(247,183,79,.25)',borderRadius:8,fontSize:12,color:'var(--text2)'}}>
+          <div style={{padding:'8px 10px',background:'rgba(255,163,0,.08)',border:'1px solid rgba(255,163,0,.25)',borderRadius:8,fontSize:12,color:'var(--text2)'}}>
             <div style={{marginBottom:6,fontSize:11,color:'var(--text3)'}}>
               ℹ️ El checkbox completa l'ocurrència actual i programa la propera.
             </div>
@@ -2682,7 +2682,7 @@ function WatchedTaskPanel({task,lists,allUsers,onClose,onRemoveSelf}) {
         <button className="btn btn-ghost btn-icon" onClick={onClose}>{Ic.x}</button>
       </div>
       <div className="detail-body">
-        <div style={{padding:'8px 10px',background:'rgba(79,142,247,.08)',border:'1px solid rgba(79,142,247,.2)',borderRadius:8,fontSize:12,color:'var(--text2)'}}>
+        <div style={{padding:'8px 10px',background:'rgba(15,184,166,.08)',border:'1px solid rgba(15,184,166,.2)',borderRadius:8,fontSize:12,color:'var(--text2)'}}>
           Estàs informat d'aquesta tasca de {ownerLabel}. No la pots editar ni completar.
         </div>
         <div className="detail-field">
@@ -2761,7 +2761,7 @@ function AssignedTaskPanel({task,lists,allUsers,onClose,onToggleStatus}) {
         <button className="btn btn-ghost btn-icon" onClick={onClose}>{Ic.x}</button>
       </div>
       <div className="detail-body">
-        <div style={{padding:'8px 10px',background:'rgba(79,142,247,.08)',border:'1px solid rgba(79,142,247,.2)',borderRadius:8,fontSize:12,color:'var(--text2)'}}>
+        <div style={{padding:'8px 10px',background:'rgba(15,184,166,.08)',border:'1px solid rgba(15,184,166,.2)',borderRadius:8,fontSize:12,color:'var(--text2)'}}>
           {ownerLabel} t'ha assignat aquesta tasca. La pots marcar com a completada, pero nomes {ownerLabel} la pot editar.
         </div>
         <div className="detail-field">
@@ -2974,7 +2974,7 @@ function DefaultFieldsModal({fields,onSave,onClose}) {
 
 // ─── GOOGLE CALENDAR SETTINGS MODAL ────────────────────────────────────────────
 function GcalSettingsModal({calendars,onSave,onClose}) {
-  const [local,setLocal] = useState(calendars.length?calendars:[{id:'primary',label:'Principal',color:'#4f8ef7'}]);
+  const [local,setLocal] = useState(calendars.length?calendars:[{id:'primary',label:'Principal',color:'#0fb8a6'}]);
   const update = (i,patch) => setLocal(l=>l.map((c,idx)=>idx===i?{...c,...patch}:c));
   const remove = i => setLocal(l=>l.filter((_,idx)=>idx!==i));
   const add = () => setLocal(l=>[...l,{id:'',label:'',color:LIST_COLORS[(l.length)%LIST_COLORS.length]}]);
@@ -3054,7 +3054,7 @@ function ListSettingsModal({list,currentUserUid,onSave,onClose,groups,onShare,on
           {isOwner&&<button className={`modal-tab ${tab==='share'?'active':''}`} onClick={()=>setTab('share')}>Compartir</button>}
         </div>
         {!isOwner&&(
-          <div style={{marginTop:12,padding:'12px 14px',background:'rgba(247,183,79,.08)',border:'1px solid rgba(247,183,79,.2)',borderRadius:10}}>
+          <div style={{marginTop:12,padding:'12px 14px',background:'rgba(255,163,0,.08)',border:'1px solid rgba(255,163,0,.2)',borderRadius:10}}>
             <p style={{fontSize:12,color:'var(--text2)',marginBottom:10}}>
               Aquesta llista pertany a un altre usuari. Pots veure i editar les tasques però no pots canviar la configuració.
             </p>
@@ -3670,7 +3670,7 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask,onMoveTask,gcalToke
               {visible.map(t=>{
                 const list=lists.find(l=>l.id===t.listId);
                 const overdue=isOverdue(t);
-                const chipBg=list?hexToRgba(list.color,.10):'rgba(79,142,247,.10)';
+                const chipBg=list?hexToRgba(list.color,.10):'rgba(15,184,166,.10)';
                 return <div key={t.id} className="cal-task-chip cal-task-chip-drag"
                   style={{background:chipBg,color:'var(--text)'}}
                   onPointerDown={e=>startChipDrag(e,t)}
@@ -3679,7 +3679,7 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask,onMoveTask,gcalToke
               })}
               {gcalVisible.map((e,i)=>(
                 <div key={`g${i}`} className="cal-task-chip cal-gcal-chip"
-                  style={{background:(e.color||'#4f8ef7')+'22',color:e.color||'#4f8ef7'}}
+                  style={{background:(e.color||'#0fb8a6')+'22',color:e.color||'#0fb8a6'}}
                   onClick={ev=>ev.stopPropagation()}
                   title={`${e.calLabel||'Google Calendar'}: ${e.title}`}>📅 {e.time?`${e.time} `:''}{e.title}</div>
               ))}
@@ -3701,7 +3701,7 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask,onMoveTask,gcalToke
                     <div key={`g${i}`} className="cal-popup-task">
                       <span style={{fontSize:12}}>📅</span>
                       <span style={{flex:1}}>{e.time?`${e.time} `:''}{e.title}</span>
-                      <span style={{fontSize:10,color:e.color||'#4f8ef7'}}>{e.calLabel||'Google'}</span>
+                      <span style={{fontSize:10,color:e.color||'#0fb8a6'}}>{e.calLabel||'Google'}</span>
                     </div>
                   ))}
                 </div>
@@ -3717,7 +3717,7 @@ function CalendarView({tasks,lists,selectedTask,onSelectTask,onMoveTask,gcalToke
         </span>)}
         {gcalToken&&activeGcalCalendars.map(cal=>(
           <span key={cal.id} style={{display:'flex',alignItems:'center',gap:4}}>
-            <span style={{width:8,height:8,borderRadius:'50%',background:cal.color||'#4f8ef7',display:'inline-block'}}/>{cal.label||cal.id}
+            <span style={{width:8,height:8,borderRadius:'50%',background:cal.color||'#0fb8a6',display:'inline-block'}}/>{cal.label||cal.id}
           </span>
         ))}
       </div>
@@ -3970,7 +3970,7 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
   const MonthBands = ({height}) => (
     <>
       {months.map((m,mi)=> mi%2===1 ? (
-        <div key={'mb'+mi} style={{position:'absolute',top:0,left:monthOffsets[mi]*DAY_W,width:m.count*DAY_W,height,background:'rgba(79,142,247,.05)',pointerEvents:'none'}}/>
+        <div key={'mb'+mi} style={{position:'absolute',top:0,left:monthOffsets[mi]*DAY_W,width:m.count*DAY_W,height,background:'rgba(15,184,166,.05)',pointerEvents:'none'}}/>
       ) : null)}
     </>
   );
@@ -4091,7 +4091,7 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
                     width:m.count*DAY_W,flexShrink:0,borderRight:'1px solid var(--border)',
                     fontSize:11,fontWeight:800,color:'var(--text)',textTransform:'uppercase',letterSpacing:'.04em',
                     padding:'0 8px',display:'flex',alignItems:'center',overflow:'hidden',
-                    background:i%2===1?'rgba(79,142,247,.09)':'transparent'
+                    background:i%2===1?'rgba(15,184,166,.09)':'transparent'
                   }}>
                     {m.label}
                   </div>
@@ -4103,7 +4103,7 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
                   <div key={i} style={{
                     width:DAY_W,flexShrink:0,textAlign:'center',
                     borderRight:'1px solid var(--border)',
-                    background:day.isToday?'rgba(79,142,247,.1)':day.isWeekend?'var(--bg2)':'transparent',
+                    background:day.isToday?'rgba(15,184,166,.1)':day.isWeekend?'var(--bg2)':'transparent',
                     color:day.isToday?'var(--accent)':day.isWeekend?'var(--text3)':'var(--text2)',
                     fontSize:9,fontWeight:day.isToday?700:400,
                     display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:1
@@ -4132,7 +4132,7 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
               if (row.type==='subtask') {
                 const {t,s} = row;
                 const list=lists.find(l=>l.id===t.listId);
-                const color=list?.color||'#4f8ef7';
+                const color=list?.color||'#0fb8a6';
                 const subKey=t.id+':'+s.id;
                 const subPreviewing=dragPreview&&dragPreview.key===subKey;
                 const ss=s.start||s.due, se=s.due||s.start;
@@ -4169,7 +4169,7 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
                           onPointerDown={e=>startBarDrag(e,'subtask',{taskId:t.id,subId:s.id},'move',si,ei)}
                           style={{
                             position:'absolute',left:barLeft,top:8,width:barW,height:14,
-                            background:s.done?'var(--bg3)':subOverdue?'var(--danger)':hexToRgba(color,.5),
+                            background:s.done?'var(--bg3)':subOverdue?'var(--danger)':hexToRgba(color,.85),
                             borderRadius:4,border:`1px solid ${s.done?'var(--border)':subOverdue?'var(--danger)':color}`,
                             opacity:s.done?.4:1,cursor:'grab',touchAction:'none',userSelect:'none',
                             boxShadow:subPreviewing?`0 0 0 2px ${color}`:undefined,transition:'box-shadow .1s'
@@ -4186,7 +4186,7 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
               }
               const t = row.t;
               const list=lists.find(l=>l.id===t.listId);
-              const color=list?.color||'#4f8ef7';
+              const color=list?.color||'#0fb8a6';
               const {s,e} = taskRange(t);
               const si=dayIdx(s),ei=dayIdx(e);
               const previewing=dragPreview&&dragPreview.key===t.id;
@@ -4204,7 +4204,7 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
                   <div style={{
                     width:LABEL_W,minWidth:LABEL_W,flexShrink:0,display:'flex',alignItems:'center',gap:7,padding:'0 10px',
                     position:'sticky',left:0,zIndex:3,
-                    background:isSelected?'rgba(79,142,247,.15)':list?hexToRgba(color,.10):'var(--bg)',
+                    background:isSelected?'rgba(15,184,166,.15)':list?hexToRgba(color,.10):'var(--bg)',
                     borderRight:'1px solid var(--border)',overflow:'hidden',transition:'background .1s'
                   }}>
                     <span style={{width:7,height:7,borderRadius:'50%',background:color,flexShrink:0}}/>
@@ -4229,7 +4229,7 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
                         onPointerDown={e=>startBarDrag(e,'task',{taskId:t.id},'move',si,ei)}
                         style={{
                         position:'absolute',left:barLeft,top:7,width:barW,height:24,
-                        background:isDone?'var(--bg3)':overdue?'var(--danger)':hexToRgba(color,.82),
+                        background:isDone?'var(--bg3)':overdue?'var(--danger)':hexToRgba(color,.95),
                         borderRadius:5,border:`1.5px solid ${isDone?'var(--border)':overdue?'var(--danger)':color}`,
                         display:'flex',alignItems:'center',padding:'0 7px',overflow:'hidden',
                         opacity:isDone?.45:1,
