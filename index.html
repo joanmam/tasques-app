@@ -3943,7 +3943,11 @@ function GanttView({tasks,lists,currentUserUid,selectedTask,onSelectTask,onUpdat
   const changeRangeMode = mode => { setRangeMode(mode); setOffset(0); };
 
   // Mode 'total': finestra amb marge de -7 dies (com abans). Setmana/Mes: comença exactament avui.
-  const winStart=(()=>{const d=new Date();d.setDate(d.getDate()+(rangeMode==='total'?-7:0)+offset);return d;})();
+  // IMPORTANT: es posa a mitjanit local (setHours(0,0,0,0)) abans de desplaçar els dies — si no,
+  // `new Date()` conserva l'hora actual, i com que dayIdx() compara cada dia contra el seu migdia
+  // ("T12:00"), passat migdia la resta queda per sota d'un dia sencer i Math.floor arrodoneix cap
+  // avall: totes les barres del Gantt sortien un dia abans de la data real a partir del migdia.
+  const winStart=(()=>{const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()+(rangeMode==='total'?-7:0)+offset);return d;})();
   const winStartStr=ymd(winStart);
   const winEnd=new Date(winStart);winEnd.setDate(winEnd.getDate()+DAYS-1);
   const winEndStr=ymd(winEnd);
