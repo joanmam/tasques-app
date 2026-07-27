@@ -5,6 +5,7 @@ Cada dia, CADA usuari de l'app (propietari o membre d'alguna llista, o
 propietari/assignat d'alguna tasca) rep el seu propi correu amb:
   - Tasques i subtasques VENÇUDES (agrupades per llista)
   - Tasques i subtasques d'AVUI (agrupades per llista)
+  - Tasques i subtasques dels PRÒXIMS 7 DIES (agrupades per llista)
 Pensat per executar-se un cop al dia des de GitHub Actions (cron extern
 tipus cron-job.org a les 6:00, seguint el mateix patró que reminders.yml).
 
@@ -32,7 +33,7 @@ pendents de reenviament.
 """
 import os, sys, json, smtplib, ssl
 from email.message import EmailMessage
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import firebase_admin
@@ -75,6 +76,22 @@ def task_due_str(d):
     return d.get("endDate") or d.get("startDate") or ""
 
 
+def in_next7_window(d, today_str, week_later_str):
+    """Mateixa regla que inDateWindow al front-end (index.html, ~linia 1497):
+    una tasca de diversos dies hi entra si ALGUN dia del seu rang [inici,fi]
+    cau dins la finestra avui..+7 dies — encara que acabi mes tard que la
+    finestra (projecte llarg en curs aquesta setmana). Una ocurrencia de
+    serie recurrent nomes fa servir la seva propia endDate (com task_due_str)."""
+    if d.get("seriesId"):
+        due = d.get("endDate") or ""
+        return bool(due) and today_str <= due <= week_later_str
+    s = d.get("startDate") or d.get("endDate") or ""
+    e = d.get("endDate") or d.get("startDate") or ""
+    if not s and not e:
+        return False
+    return s <= week_later_str and e >= today_str
+
+
 def fmt_date(ds):
     try:
         return datetime.strptime(ds, "%Y-%m-%d").strftime("%d/%m/%Y")
@@ -112,8 +129,8 @@ def render_section(title_icon, title_text, by_list, list_name):
     return "\n".join(lines)
 
 
-def build_digest_for_user(uid, today_str, lists_cache, all_tasks, list_name):
-    """Calcula el resum (vençudes/avui, agrupat per llista) d'un usuari concret."""
+def build_digest_for_user(uid, today_str, week_later_str, lists_cache, all_tasks, list_name):
+    """Calcula el resum (vençudes/avui/pròxims 7 dies, agrupat per llista) d'un usuari concret."""
     user_list_ids = {
         list_id for list_id, ldata in lists_cache.items()
         if ldata.get("ownerId") == uid or uid in (ldata.get("sharedWith") or [])
@@ -128,8 +145,12 @@ def build_digest_for_user(uid, today_str, lists_cache, all_tasks, list_name):
             return True
         return False
 
-    overdue_by_list, today_by_list = {}, {}
-    counts = {"overdue_tasks": 0, "overdue_sub": 0, "today_tasks": 0, "today_sub": 0}
+    overdue_by_list, today_by_list, soon_by_list = {}, {}, {}
+    counts = {
+        "overdue_tasks": 0, "overdue_sub": 0,
+        "today_tasks": 0, "today_sub": 0,
+        "soon_tasks": 0, "soon_sub": 0,
+    }
 
     for d in all_tasks:
         if not belongs_to_user(d):
@@ -144,6 +165,9 @@ def build_digest_for_user(uid, today_str, lists_cache, all_tasks, list_name):
             elif due == today_str:
                 bucket(today_by_list, list_id)["tasks"].append(d)
                 counts["today_tasks"] += 1
+            elif in_next7_window(d, today_str, week_later_str):
+                bucket(soon_by_list, list_id)["tasks"].append(d)
+                counts["soon_tasks"] += 1
 
         for s in (d.get("subtasks") or []):
             if s.get("done"):
@@ -161,26 +185,33 @@ def build_digest_for_user(uid, today_str, lists_cache, all_tasks, list_name):
             elif sdue == today_str:
                 bucket(today_by_list, list_id)["subtasks"].append(entry)
                 counts["today_sub"] += 1
+            elif today_str < sdue <= week_later_str:
+                bucket(soon_by_list, list_id)["subtasks"].append(entry)
+                counts["soon_sub"] += 1
 
-    return overdue_by_list, today_by_list, counts
+    return overdue_by_list, today_by_list, soon_by_list, counts
 
 
-def render_email(uid, addr, today_str, today_label, lists_cache, all_tasks, list_name):
+def render_email(uid, addr, today_str, week_later_str, today_label, lists_cache, all_tasks, list_name):
     """Calcula i retorna (subject, body, counts) del resum d'un usuari, sense enviar-lo."""
-    overdue_by_list, today_by_list, c = build_digest_for_user(
-        uid, today_str, lists_cache, all_tasks, list_name
+    overdue_by_list, today_by_list, soon_by_list, c = build_digest_for_user(
+        uid, today_str, week_later_str, lists_cache, all_tasks, list_name
     )
     total = c["overdue_tasks"] + c["overdue_sub"] + c["today_tasks"] + c["today_sub"]
+    soon_total = c["soon_tasks"] + c["soon_sub"]
 
     body_parts = [f"Resum de tasques — {today_label}\n"]
     overdue_section = render_section("⚠️", "VENÇUDES", overdue_by_list, list_name)
     today_section = render_section("📅", "AVUI", today_by_list, list_name)
+    soon_section = render_section("🗓️", "PRÒXIMS 7 DIES", soon_by_list, list_name)
     if overdue_section:
         body_parts.append(overdue_section)
     if today_section:
         body_parts.append(today_section)
     if total == 0:
         body_parts.append("Cap tasca vençuda ni per avui. 🎉\n")
+    if soon_section:
+        body_parts.append(soon_section)
     body_parts.append(f"Obre l'app: {APP_URL}")
     body = "\n".join(body_parts)
 
@@ -214,7 +245,7 @@ def make_smtp_getter():
     return get_smtp, close
 
 
-def process_pending_requests(db, today_str, today_label, lists_cache, all_tasks, list_name):
+def process_pending_requests(db, today_str, week_later_str, today_label, lists_cache, all_tasks, list_name):
     """Mira digestRequests i envia immediatament el resum a qui ho hagi demanat des de l'app."""
     reqs = list(db.collection("digestRequests").where("status", "==", "pending").stream())
     if not reqs:
@@ -236,7 +267,7 @@ def process_pending_requests(db, today_str, today_label, lists_cache, all_tasks,
                 doc.reference.delete()
             continue
 
-        subject, body, c = render_email(uid, addr, today_str, today_label, lists_cache, all_tasks, list_name)
+        subject, body, c = render_email(uid, addr, today_str, week_later_str, today_label, lists_cache, all_tasks, list_name)
         print(f"===== [peticio] {addr} =====")
         print(body)
 
@@ -261,6 +292,7 @@ def main():
     now = datetime.now(TZ)
     today_str = now.strftime("%Y-%m-%d")
     today_label = now.strftime("%d/%m/%Y")
+    week_later_str = (now + timedelta(days=7)).strftime("%Y-%m-%d")
 
     if not DRY_RUN and not GMAIL_APP_PASSWORD:
         print("ERROR: falta el secret GMAIL_APP_PASSWORD")
@@ -278,7 +310,7 @@ def main():
     all_tasks = [doc.to_dict() or {} for doc in db.collection("tasks").stream()]
 
     if PROCESS_REQUESTS:
-        n = process_pending_requests(db, today_str, today_label, lists_cache, all_tasks, list_name)
+        n = process_pending_requests(db, today_str, week_later_str, today_label, lists_cache, all_tasks, list_name)
         print(f"Fet (mode peticions). Resums enviats: {n}.")
         return
 
@@ -322,12 +354,13 @@ def main():
             print(f"[skip] {addr}: ja enviat avui")
             continue
 
-        subject, body, c = render_email(uid, addr, today_str, today_label, lists_cache, all_tasks, list_name)
+        subject, body, c = render_email(uid, addr, today_str, week_later_str, today_label, lists_cache, all_tasks, list_name)
 
         print(f"===== {addr} =====")
         print(body)
         print(f"--- {c['overdue_tasks']} tasques vençudes, {c['overdue_sub']} subtasques vençudes, "
-              f"{c['today_tasks']} tasques avui, {c['today_sub']} subtasques avui ---")
+              f"{c['today_tasks']} tasques avui, {c['today_sub']} subtasques avui, "
+              f"{c['soon_tasks']} tasques pròxims 7 dies, {c['soon_sub']} subtasques pròxims 7 dies ---")
 
         if DRY_RUN:
             continue
