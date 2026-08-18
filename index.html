@@ -400,6 +400,9 @@ const RECURRENCE_OPTIONS = [
   {value:'monthly4w',label:'Mensualment (cada 4 setmanes)'},
   {value:'yearly',label:'Anualment'},
 ];
+// Tipus de recurrència que admeten un interval personalitzat ("cada X dies/setmanes/mesos").
+const RECURRENCE_INTERVAL_TYPES = ['daily','weekly','monthly'];
+const RECURRENCE_UNIT_LABEL = {daily:'dies',weekly:'setmanes',monthly:'mesos'};
 // ── Notificacions push (Web Push + VAPID) ──────────────────────────────────
 const VAPID_PUBLIC_KEY = 'BIPqnC-UD_KutAs0wlpackJLHEfbsORT0Ra-DUDWbNd9bXTqpO23o6whWeIwbgsP3ySst_NYfHLfxCdpiCaYRLE';
 const urlBase64ToUint8Array = (b64) => {
@@ -719,12 +722,13 @@ const normText = s => {
   return out.toLowerCase();
 };
 
-const nextOccurrence = (dateStr, recurrence) => {
+const nextOccurrence = (dateStr, recurrence, interval) => {
+  const n = Math.max(1, parseInt(interval,10)||1);
   const d = new Date(dateStr + 'T12:00');
   switch(recurrence) {
-    case 'daily': d.setDate(d.getDate()+1); break;
-    case 'weekly': d.setDate(d.getDate()+7); break;
-    case 'monthly': d.setMonth(d.getMonth()+1); break;
+    case 'daily': d.setDate(d.getDate()+n); break;
+    case 'weekly': d.setDate(d.getDate()+7*n); break;
+    case 'monthly': d.setMonth(d.getMonth()+n); break;
     case 'monthly4w': d.setDate(d.getDate()+28); break;
     case 'yearly': d.setFullYear(d.getFullYear()+1); break;
     case 'weekdays':
@@ -733,6 +737,19 @@ const nextOccurrence = (dateStr, recurrence) => {
     default: return null;
   }
   return ymd(d);
+};
+// Etiqueta llegible d'una recurrència, tenint en compte l'interval personalitzat
+// (p. ex. "Cada 3 setmanes"). Si l'interval es 1 (o no aplica), es fa servir
+// l'etiqueta fixa de RECURRENCE_OPTIONS ("Setmanalment", etc.)
+const recurrenceLabel = task => {
+  if (!task || !task.recurrence || task.recurrence==='none') return null;
+  const opt = RECURRENCE_OPTIONS.find(o=>o.value===task.recurrence);
+  if (!opt) return null;
+  const n = Math.max(1, parseInt(task.recurrenceInterval,10)||1);
+  if (RECURRENCE_INTERVAL_TYPES.includes(task.recurrence) && n>1) {
+    return `Cada ${n} ${RECURRENCE_UNIT_LABEL[task.recurrence]}`;
+  }
+  return opt.label;
 };
 
 const Ic = {
@@ -841,7 +858,7 @@ function App() {
   const nextOccurrenceFor = task => {
     if (!task.recurrence || task.recurrence==='none') return null;
     const base = task.endDate||task.startDate; if (!base) return null;
-    const nx = nextOccurrence(base, task.recurrence);
+    const nx = nextOccurrence(base, task.recurrence, task.recurrenceInterval);
     if (!nx) return null;
     if (task.recurrenceEndDate && nx > task.recurrenceEndDate) return null;
     return {date:nx, time:task.startTime||task.endTime||''};
@@ -1181,7 +1198,7 @@ function App() {
       let safety = 0;
       while (cur <= limitStr && safety < 400) {
         dates.push(cur);
-        const nx = nextOccurrence(cur, data.recurrence);
+        const nx = nextOccurrence(cur, data.recurrence, data.recurrenceInterval);
         if (!nx) break;
         cur = nx; safety++;
       }
@@ -2033,7 +2050,7 @@ function TaskItem({task,lists,selected,onClick,onToggle,onDelete,onDelay,onTrack
   const list  = lists.find(l=>l.id===task.listId);
   const total = task.subtasks?.length??0;
   const doneN = task.subtasks?.filter(s=>s.done).length??0;
-  const recLabel = RECURRENCE_OPTIONS.find(r=>r.value===task.recurrence&&task.recurrence!=='none')?.label;
+  const recLabel = recurrenceLabel(task);
   return (
     <div className={`task-item ${done?'done':''} ${selected?'selected':''}`} onClick={onClick}
       onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)}
@@ -2403,9 +2420,19 @@ function DetailPanel({task,lists,defaultFields,allTags,currentUserUid,currentUse
           </div>
           <div className="detail-field">
             <label>{Ic.repeat} Repetició</label>
-            <select className="detail-select" value={local.recurrence||'none'} onChange={e=>push({recurrence:e.target.value})}>
+            <select className="detail-select" value={local.recurrence||'none'}
+              onChange={e=>{const v=e.target.value;push(RECURRENCE_INTERVAL_TYPES.includes(v)?{recurrence:v,recurrenceInterval:local.recurrenceInterval||1}:{recurrence:v,recurrenceInterval:1});}}>
               {RECURRENCE_OPTIONS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
+            {RECURRENCE_INTERVAL_TYPES.includes(local.recurrence)&&(
+              <div style={{display:'flex',alignItems:'center',gap:6,marginTop:6}}>
+                <span style={{fontSize:11,color:'var(--text3)'}}>Cada</span>
+                <input type="number" min="1" max="99" className="detail-select" style={{width:56,padding:'4px 6px',cursor:'text',textAlign:'center'}}
+                  value={local.recurrenceInterval||1}
+                  onChange={e=>push({recurrenceInterval:Math.max(1,parseInt(e.target.value,10)||1)})}/>
+                <span style={{fontSize:11,color:'var(--text3)'}}>{RECURRENCE_UNIT_LABEL[local.recurrence]}</span>
+              </div>
+            )}
           </div>
         </div>
         {(local.recurrence&&local.recurrence!=='none')&&(
@@ -3310,7 +3337,7 @@ function NewTaskModal({lists,defaultFields,defaultList,contacts,onSave,onClose,p
       priority:'mitjana',status:'pendent',tags:[],
       contactId:'',contactName:'',contactPhone:'',
       listId:preFill?.listId||defaultList||lists[0]?.id||'',subtasks:[],customValues:{},
-      reminderMinutes:0,recurrence:'none',recurrenceEndDate:''
+      reminderMinutes:0,recurrence:'none',recurrenceInterval:1,recurrenceEndDate:''
     };
   });
   const [tagInput,setTagInput] = useState('');
@@ -3397,9 +3424,19 @@ function NewTaskModal({lists,defaultFields,defaultList,contacts,onSave,onClose,p
           </div>
           <div style={{flex:1}}>
             <label style={{fontSize:10,color:'var(--text3)',display:'block',marginBottom:3}}>Repetició</label>
-            <select className="input" value={form.recurrence} onChange={e=>set('recurrence',e.target.value)}>
+            <select className="input" value={form.recurrence}
+              onChange={e=>{const v=e.target.value;setForm(f=>({...f,recurrence:v,recurrenceInterval:RECURRENCE_INTERVAL_TYPES.includes(v)?(f.recurrenceInterval||1):1}));}}>
               {RECURRENCE_OPTIONS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
+            {RECURRENCE_INTERVAL_TYPES.includes(form.recurrence)&&(
+              <div style={{display:'flex',alignItems:'center',gap:6,marginTop:6}}>
+                <span style={{fontSize:11,color:'var(--text3)'}}>Cada</span>
+                <input type="number" min="1" max="99" className="input" style={{width:56,padding:'4px 6px',cursor:'text',textAlign:'center'}}
+                  value={form.recurrenceInterval||1}
+                  onChange={e=>set('recurrenceInterval',Math.max(1,parseInt(e.target.value,10)||1))}/>
+                <span style={{fontSize:11,color:'var(--text3)'}}>{RECURRENCE_UNIT_LABEL[form.recurrence]}</span>
+              </div>
+            )}
           </div>
         </div>
         {form.recurrence!=='none'&&(
@@ -3739,7 +3776,7 @@ function getTaskOccurrences(task, startStr, endStr) {
   if (task.recurrence && task.recurrence !== 'none') {
     let safety = 0;
     while (cur < startStr && safety < 500) {
-      const nx = nextOccurrence(cur, task.recurrence);
+      const nx = nextOccurrence(cur, task.recurrence, task.recurrenceInterval);
       if (!nx || (task.recurrenceEndDate && nx > task.recurrenceEndDate)) break;
       cur = nx; safety++;
     }
@@ -3749,7 +3786,7 @@ function getTaskOccurrences(task, startStr, endStr) {
   while (cur <= endStr && safety < 500) {
     if (cur >= startStr) dates.add(cur);
     if (!task.recurrence || task.recurrence === 'none') break;
-    const nx = nextOccurrence(cur, task.recurrence);
+    const nx = nextOccurrence(cur, task.recurrence, task.recurrenceInterval);
     if (!nx || (task.recurrenceEndDate && nx > task.recurrenceEndDate)) break;
     cur = nx; safety++;
   }
@@ -3847,7 +3884,7 @@ function SeguimentView({tasks, completionLogs, lists}) {
       {taskData.map(({task, days, occCount, compCount, logsForHeatmap, seriesStart, endStr})=>{
         const list = lists.find(l=>l.id===task.listId);
         const color = list?.color||'var(--accent)';
-        const recLabel = RECURRENCE_OPTIONS.find(r=>r.value===task.recurrence&&task.recurrence!=='none')?.label;
+        const recLabel = recurrenceLabel(task);
         return (
           <div key={task.id} className="tracked-card">
             <div className="tracked-task-header">
