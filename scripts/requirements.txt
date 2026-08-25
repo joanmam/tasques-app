@@ -1,3 +1,12 @@
 firebase-admin>=6.5
 tzdata>=2024.1
 requests>=2.31
+
+# google-cloud-firestore es instal.la automaticament com a dependencia de
+# firebase-admin (sense versio fixada). La 2.29.0, publicada el 24 d'agost
+# de 2026, te una regressio que trenca les consultes amb .where() amb un
+# error fals "Invalid database id (default)" encara que la base de dades
+# per defecte existeixi i sigui correcta. Fixem la versio anterior coneguda
+# bona fins que Google ho arregli. Provar de treure aquest pin de tant en
+# tant per veure si ja esta solucionat.
+google-cloud-firestore==2.28.1
