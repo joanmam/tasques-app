@@ -2,11 +2,18 @@ firebase-admin>=6.5
 tzdata>=2024.1
 requests>=2.31
 
-# google-cloud-firestore es instal.la automaticament com a dependencia de
-# firebase-admin (sense versio fixada). La 2.29.0, publicada el 24 d'agost
-# de 2026, te una regressio que trenca les consultes amb .where() amb un
-# error fals "Invalid database id (default)" encara que la base de dades
-# per defecte existeixi i sigui correcta. Fixem la versio anterior coneguda
-# bona fins que Google ho arregli. Provar de treure aquest pin de tant en
-# tant per veure si ja esta solucionat.
+# El 24 d'agost de 2026, Google va publicar el mateix dia noves versions de
+# diverses llibreries client de Google Cloud (google-cloud-firestore 2.29.0,
+# google-api-core 2.35.0, google-auth 2.57.0). Alguna d'aquestes (probablement
+# google-api-core, que construeix les rutes de les peticions) te una regressio
+# que fa fallar QUALSEVOL consulta a Firestore amb un error fals "Invalid
+# database id (default)", encara que la base de dades per defecte existeixi i
+# sigui correcta (verificat a la consola de Firebase). Com que cap d'aquestes
+# llibreries estava fixada a requirements.txt (arriben totes com a dependencies
+# transitives de firebase-admin), cada execucio de GitHub Actions n'instal.lava
+# la ultima versio disponible. Fixem aqui les ultimes versions bones conegudes
+# (les d'abans del 24 d'agost de 2026) fins que Google solucioni el problema.
+# Provar de treure aquests pins de tant en tant per veure si ja esta arreglat.
 google-cloud-firestore==2.28.1
+google-api-core==2.34.0
+google-auth==2.56.3
