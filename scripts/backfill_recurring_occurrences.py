@@ -53,18 +53,23 @@ def parse_ymd(s):
     return date(int(y), int(m), int(dd))
 
 
-def next_occurrence(date_str, recurrence):
-    """Rèplica exacta de la funció JS nextOccurrence() del client."""
+def next_occurrence(date_str, recurrence, interval=1):
+    """Rèplica exacta de la funció JS nextOccurrence() del client.
+
+    'interval' és el "cada X" per a daily/weekly/monthly (per defecte 1,
+    igual que abans que existís aquest camp — compatible amb tasques antigues
+    que no tenen 'recurrenceInterval')."""
+    n = max(1, int(interval or 1))
     d = parse_ymd(date_str)
     if recurrence == "daily":
-        d = d + timedelta(days=1)
+        d = d + timedelta(days=n)
     elif recurrence == "weekly":
-        d = d + timedelta(days=7)
+        d = d + timedelta(days=7 * n)
     elif recurrence == "monthly":
-        # mateix dia del mes seguent (com Date.setMonth a JS, amb el mateix
-        # desbordament si el dia no existeix al mes seguent: p.ex. 31 de gener
+        # mateix dia, n mesos despres (com Date.setMonth a JS, amb el mateix
+        # desbordament si el dia no existeix al mes desti: p.ex. 31 de gener
         # + 1 mes -> 3 de març, no 28 de febrer).
-        month = d.month + 1
+        month = d.month + n
         year = d.year + (month - 1) // 12
         month = (month - 1) % 12 + 1
         days_in_month = calendar.monthrange(year, month)[1]
@@ -138,6 +143,7 @@ def main():
         if not last_date:
             continue
         recurrence = ref_data.get("recurrence")
+        recurrence_interval = ref_data.get("recurrenceInterval") or 1
         recurrence_end = ref_data.get("recurrenceEndDate") or ""
         limit_str = recurrence_end if recurrence_end else limit_default
         real_series_id = ref_data.get("seriesId")  # None si era "solo"
@@ -150,7 +156,7 @@ def main():
         cur = last_date
         safety = 0
         while safety < MAX_SAFETY:
-            nx = next_occurrence(cur, recurrence)
+            nx = next_occurrence(cur, recurrence, recurrence_interval)
             if not nx or nx > limit_str:
                 break
             if nx >= today_str:
